@@ -19,14 +19,18 @@ logger = get_logger(__name__)
 def print_status_entry(name: str, statement: str, status: str, trusted_steps: List[str]) -> None:
     logger.info("[theorem] %s : %s", name, statement)
     if status == "proved":
-        logger.info("  [ok] proof complete")
+        logger.info("  [PROVED ✓] proof complete — kernel-verified, certificate issued")
     elif status == "trusted":
-        trusted = ", ".join(trusted_steps) if trusted_steps else "trusted path"
-        logger.info("  [ok, trusted] proof complete (trusted: %s)", trusted)
+        unverified_count = len(trusted_steps)
+        logger.warning(
+            "  [TRUSTED ⚠] proof complete but %d UNVERIFIED step(s) — no certificate issued"
+            " (use get_proof_summary() for step details)",
+            unverified_count,
+        )
     elif status == "sorry":
-        logger.info("  [sorry] proof admitted")
+        logger.warning("  [SORRY ✗] proof admitted (sorry) — no certificate issued")
     else:
-        logger.info("  [%s]", status)
+        logger.warning("  [INCOMPLETE ✗] %s", status)
 
 
 def _load_py_file(filepath: str) -> None:

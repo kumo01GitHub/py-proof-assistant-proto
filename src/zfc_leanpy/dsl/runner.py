@@ -11,16 +11,38 @@ from ..tactics import apply_tactic
 logger = get_logger(__name__)
 
 
+def _log_tactic_result(tac: str, before_trusted: int, state: ProofState) -> None:
+    """Log the verification outcome of a single tactic application.
+
+    Note: The names of unverified steps are not included in the log message to
+    avoid flowing proof-internal labels through logging sinks. Use
+    ``get_proof_summary()`` to retrieve the full list of unverified step labels.
+    """
+    if state.admitted:
+        logger.warning("    [SORRY] tactic '%s' — proof admitted (sorry)", tac)
+    elif len(state.trusted_steps) > before_trusted:
+        unverified_count = len(state.trusted_steps) - before_trusted
+        logger.warning(
+            "    [TRUSTED] tactic '%s' — bypassed kernel type-checker (%d unverified step(s) added)",
+            tac,
+            unverified_count,
+        )
+    else:
+        logger.debug("    [kernel] tactic '%s' — kernel-verified", tac)
+
+
 def run_tactics(statement: str, tactics: List[str]) -> ProofState:
     state = ProofState(statement)
     for tac in tactics:
         if state.closed:
             break
+        before_trusted = len(state.trusted_steps)
         try:
             state = apply_tactic(state, tac)
         except TacticError as e:
             logger.error("  [dsl error] %s", e)
             break
+        _log_tactic_result(tac, before_trusted, state)
     return state
 
 

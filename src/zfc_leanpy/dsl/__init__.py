@@ -4,6 +4,7 @@ from .registry import (
     reset_registry,
     get_registry,
     get_status,
+    get_proof_summary,
     list_axioms,
     list_theorems,
 )
@@ -42,6 +43,7 @@ __all__ = [
     "list_axioms",
     "list_theorems",
     "get_status",
+    "get_proof_summary",
     # デコレータ API
     "axiom",
     "theorem",
