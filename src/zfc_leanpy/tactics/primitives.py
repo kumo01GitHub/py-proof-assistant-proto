@@ -131,7 +131,8 @@ def do_apply(state: ProofState, arg: str) -> ProofState:
         )
 
     # Exact match: hypothesis type equals the goal — kernel-close immediately
-    # (equivalent to `exact arg`; no trusted mark needed).
+    # (equivalent to `exact arg`; checked first as it avoids an unnecessary
+    # goal replacement when the types already coincide).
     if feq(term_type, goal):
         state.close_with(PVar(arg))
         return state

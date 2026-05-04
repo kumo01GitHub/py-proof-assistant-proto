@@ -178,7 +178,7 @@ class TestTrustedReasons:
 class TestReasonInLog:
     def test_log_includes_reason(self, caplog):
         """The [TRUSTED ⚠] log line includes the reason for the fallback."""
-        # `apply h` where h:P and goal:Q — conclusion mismatch → trusted fallback.
+        # `apply h` where h : P and goal : Q — conclusion mismatch → trusted fallback.
         with caplog.at_level(logging.WARNING, logger="zfc_leanpy"):
             @theorem(
                 "log_reason_test",
@@ -229,6 +229,7 @@ class TestApplyTrustedReduction:
         s = ProofState("Q", {"h": "P → Q"})
         s = apply_tactic(s, "apply h")
         assert not s.trusted_steps
+        assert not s.closed
         assert s.current_goal() == "P"
 
     def test_apply_not_false_no_trusted_mark(self):
@@ -236,6 +237,7 @@ class TestApplyTrustedReduction:
         s = ProofState("False", {"h": "¬P"})
         s = apply_tactic(s, "apply h")
         assert not s.trusted_steps
+        assert not s.closed
         assert s.current_goal() == "P"
 
     def test_apply_exact_match_closes_kernel_verified(self):
