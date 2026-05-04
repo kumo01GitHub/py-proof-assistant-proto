@@ -49,6 +49,7 @@ def get_proof_summary(name: str) -> Optional[Dict]:
       - ``status``: "proved" | "trusted" | "sorry" | "axiom" | "defined" | incomplete string
       - ``can_issue_certificate``: True only when status is "proved"
       - ``trusted_steps``: list of tactic names that were accepted without kernel verification
+      - ``trusted_reasons``: list of reasons (parallel to trusted_steps) explaining each fallback
       - ``replay_ok``: whether the full proof replayed without trusted steps
       - ``error_message``: human-readable explanation when the proof is not fully verified
     """
@@ -59,6 +60,7 @@ def get_proof_summary(name: str) -> Optional[Dict]:
     entry = deepcopy(entry)
     status = entry["status"]
     trusted_steps: List[str] = entry.get("trusted_steps", [])
+    trusted_reasons: List[str] = entry.get("trusted_reasons", [])
     replay_ok: bool = bool(entry.get("replay_ok", False))
 
     can_issue_certificate = status == "proved"
@@ -94,6 +96,7 @@ def get_proof_summary(name: str) -> Optional[Dict]:
         "status": status,
         "can_issue_certificate": can_issue_certificate,
         "trusted_steps": trusted_steps,
+        "trusted_reasons": trusted_reasons,
         "replay_ok": replay_ok,
         "error_message": error_message,
     }
