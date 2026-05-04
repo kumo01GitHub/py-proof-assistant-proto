@@ -1,10 +1,12 @@
 """Convenience tactic helper wrappers for function-style proofs."""
 
+from typing import Optional
+
 from ..kernel import ProofState
 from ..tactics import apply_tactic
 
 
-def intro(state: ProofState, name: str = None) -> ProofState:
+def intro(state: ProofState, name: Optional[str] = None) -> ProofState:
     return apply_tactic(state, f"intro {name}" if name else "intro")
 
 

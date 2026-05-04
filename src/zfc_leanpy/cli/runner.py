@@ -37,6 +37,9 @@ def _load_py_file(filepath: str) -> None:
     """`.py` ファイルをモジュールとしてロードし、クラス定義・デコレータを実行させる。"""
     abs_path = os.path.abspath(filepath)
     spec = importlib.util.spec_from_file_location("_zfc_user_module", abs_path)
+    if spec is None or spec.loader is None:
+        logger.error("Cannot load module from %s", filepath)
+        return
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
 
@@ -85,7 +88,7 @@ def interpret_file(filepath: str) -> Dict[str, Dict]:
             logger.info("[def] %s", name)
 
     logger.info("=== Done ===")
-    return dsl.get_registry()
+    return dict(dsl.get_registry())
 
 
 def step_file(filepath: str, theorem_name: str | None = None) -> None:

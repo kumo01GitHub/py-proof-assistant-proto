@@ -17,6 +17,7 @@ from ..formula import (
     PAndE1,
     PAndE2,
     PRefl,
+    PTerm,
     PTrueI,
     PVar,
     feq,
@@ -41,14 +42,14 @@ def normalize_tactic_text(text: str) -> str:
     return t
 
 
-def parse_proof_term(expr: str) -> Optional[object]:
+def parse_proof_term(expr: str) -> Optional[PTerm]:
     parts = expr.split(".")
     if not parts:
         return None
     base = parts[0].strip()
     if not base:
         return None
-    term: object = PVar(base)
+    term: PTerm = PVar(base)
     for p in parts[1:]:
         pp = p.strip()
         if pp == "1":
@@ -210,6 +211,12 @@ def do_cases(state: ProofState, arg: str) -> ProofState:
     if isinstance(hyp_type, FOr):
         # h : A ∨ B  →  two goals: [A-branch], [B-branch]
         current_goal = state.current_goal()
+        if current_goal is None:
+            return trusted_close(
+                state,
+                f"cases {hyp_name}",
+                "no current goal to perform case split on",
+            )
         h_left = f"{hyp_name}_left"
         h_right = f"{hyp_name}_right"
 

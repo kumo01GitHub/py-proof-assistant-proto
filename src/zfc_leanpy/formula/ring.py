@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import re
 from fractions import Fraction
-from typing import Dict, Optional, Tuple
+from typing import Dict, List, Optional, Tuple
 
 # 単項式: ソート済みの (変数名, 指数) タプル
 Monomial = Tuple[Tuple[str, int], ...]
@@ -63,7 +63,7 @@ _TOKEN = re.compile(r'\d+|[A-Za-z_]\w*|[+\-*/^()]')
 
 class _Tok:
     def __init__(self, text: str) -> None:
-        self._ts = _TOKEN.findall(text.replace(' ', '').replace('\t', ''))
+        self._ts: List[str] = _TOKEN.findall(text.replace(' ', '').replace('\t', ''))
         self._i = 0
 
     def peek(self) -> Optional[str]:

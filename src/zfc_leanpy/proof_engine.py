@@ -22,21 +22,21 @@ logger = get_logger(__name__)
 # ---------------------------------------------------------------------------
 
 @theorem("p_implies_p", "P → P", tactics=["intro h", "exact h"])
-def _(): pass
+def _() -> None: pass
 
 
 @theorem(
     "or_intro_left", "P → P ∨ Q",
     tactics=["intro h", "left", "exact h"]
 )
-def _(): pass
+def _() -> None: pass
 
 
 @theorem(
     "and_comm", "P ∧ Q → Q ∧ P",
     tactics=["intro h", "constructor", "exact h.2", "exact h.1"]
 )
-def _(): pass
+def _() -> None: pass
 
 
 @theorem(
@@ -44,28 +44,28 @@ def _(): pass
     tactics=["intro h", "constructor", "exact h.1.1",
              "constructor", "exact h.1.2", "exact h.2"]
 )
-def _(): pass
+def _() -> None: pass
 
 
 @theorem(
     "iff_intro", "(P → Q) → (Q → P) → (P ↔ Q)",
     tactics=["intro hpq", "intro hqp", "split", "exact hpq", "exact hqp"]
 )
-def _(): pass
+def _() -> None: pass
 
 
 @theorem(
     "double_neg", "¬¬P → P",
     tactics=["sorry"]
 )
-def _(): pass
+def _() -> None: pass
 
 
 @theorem(
     "exists_refl", "∃ x, x = x",
     tactics=["use x", "rfl"]
 )
-def _(): pass
+def _() -> None: pass
 
 
 # ---------------------------------------------------------------------------
@@ -86,7 +86,7 @@ def proof_trivial_conj(state: ProofState) -> ProofState:
 # デモ出力
 # ---------------------------------------------------------------------------
 
-def main():
+def main() -> None:
     registry = get_registry()
     theorems = {k: v for k, v in registry.items() if v["kind"] in ("theorem", "lemma")}
 

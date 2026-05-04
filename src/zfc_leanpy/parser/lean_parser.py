@@ -145,7 +145,7 @@ def parse_lean_file(filepath: str) -> List[Dict]:
             stmt_m = re.search(r":\s*(.+)$", sig)
             stmt = stmt_m.group(1).strip() if stmt_m else sig.strip()
 
-            tactics: List[str] = []
+            tactics = []
             i += 1
             while i < len(lines):
                 ln = lines[i].rstrip()
@@ -191,7 +191,7 @@ def parse_lean_file(filepath: str) -> List[Dict]:
 
             marker = lines[i].strip()
             if marker == "begin":
-                tactics: List[str] = []
+                tactics = []
                 i += 1
                 while i < len(lines):
                     ln = lines[i].rstrip()
@@ -214,7 +214,7 @@ def parse_lean_file(filepath: str) -> List[Dict]:
                 continue
 
             if marker.startswith("by"):
-                tactics: List[str] = []
+                tactics = []
                 same_line_tactic = marker[2:].strip()
                 if same_line_tactic:
                     tactics.append(same_line_tactic)
