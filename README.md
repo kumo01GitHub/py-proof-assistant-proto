@@ -1,4 +1,35 @@
-# Python 証明支援系
+# Python 証明支援系（py-proof-assistant-proto）
+
+> **Pythonで形式証明のハードルを下げる**、軽量・実験的な証明支援システムのプロトタイプです。
+
+## プロジェクトの目的と新規性
+
+### なぜ Pythonで証明支援系を作るのか？
+
+Lean 4 / Coq / Agda といった既存の定理証明支援系は、強力な型システムと高い健全性を持つ一方で、
+**学習コストが高く**、専用言語・専用環境のセットアップが必要です。
+
+本プロジェクトは、**日常的に Python を使う開発者・研究者が、追加ツールなしで形式証明を試せる**
+環境を提供することを目的としています。
+
+### 既存ツールとの違い
+
+| ツール | 特徴 | 本プロジェクトとの違い |
+|---|---|---|
+| Lean 4 / Coq | カーネルレベルの完全型安全・強力な型システム | 学習コストが高い・専用言語が必要 |
+| TinyLean | Lean の教育的簡略版 | 静的型付け・カーネル検証が前提 |
+| Coq.py 等 | Pythonラッパー（外部カーネルに依存） | 外部ランタイムが必要 |
+| **本プロジェクト** | **Pythonのみ・stdlib のみ・動的型付け** | **すぐに試せる・ランタイム検証・プロトタイピング向け** |
+
+### 独自性のポイント
+
+- **Pythonクラス定義だけで定理・補題・公理を記述** — Lean風DSLを`@theorem`デコレータやクラスAPIで提供
+- **`trusted` / `proved` / `sorry` の三段階ステータス** — 証明の完全性を段階的に追跡・可視化
+- **決定手続きタクティク**（`ring` / `omega` / `simp`）を内蔵し、`proved` 証明書を発行
+- **動的型のリスクをランタイムガードで補完** — `util.guards` による事前型チェックで型安全性を確保
+- **stdlib のみ** — 依存ライブラリゼロで `pip install` 後すぐ動作
+
+---
 
 **Python クラス**で命題論理の定理・公理を記述し、自然演繹カーネルで証明を検査するシステムです。
 
@@ -9,6 +40,7 @@
 | **証明カーネル** | 自然演繹に基づく `type_check()` で全ステップの健全性を保証する |
 | **パーサ** | `.lean` ファイルと Python DSL を相互変換する |
 | **CLI** | ファイル実行・ステップ実行・変換をコマンドラインから行う |
+| **util モジュール** | エラーハンドリング・ログ整形を一元化し、型安全性を補完する |
 
 ---
 
@@ -186,9 +218,27 @@ class LinearFact(Theorem):
     tactics = [omega()]   # n >= 0 が仮説にあれば proved
 ```
 
-### trusted タクティク（型を追いきれないため無検査）
+### trusted タクティク（型を追いきれないため一部無検査）
 
 `apply_()` / `cases()` / `rcases()` / `have()` / `rw()`
+
+これらのタクティクは、仮説の型追跡が困難なケースに限り `trusted_close()` で受け入れます。
+`ProofState.trusted_steps` と `trusted_reasons` に記録され、`get_proof_summary()` で確認できます。
+
+```python
+from zfc_leanpy.dsl import get_proof_summary
+
+summary = get_proof_summary("MyTheorem")
+# {'status': 'trusted', 'trusted_steps': ['apply_'], 'trusted_reasons': ['unknown hyp type']}
+```
+
+`apply_()` は以下の3ケースではカーネル検証済みとなり `trusted` マークが付きません：
+
+| ケース | 条件 | 証明項 |
+|---|---|---|
+| 完全一致 | 仮説の型がゴールと同じ | PVar(h) |
+| 含意後退 | 仮説が `A → Goal` の形 | replace\_goal(A) |
+| 否定除去 | ゴールが `¬P` で `False` が利用可能 | replace\_goal(negand) |
 
 ### admitted
 
@@ -236,6 +286,50 @@ t = t                        rfl               PRefl(t)
 | 型検査器 | `formula.type_check()` |
 | 証明項 | `PTerm`（PVar / PAndI / PRefl / PRing / POmega / PSimp / PNormNum ...） |
 | タクティク | `tactics/engine.py`（`close_with` 経由でカーネルを呼ぶ） |
+
+---
+
+## util モジュール — エラーハンドリングとログ整形
+
+`src/zfc_leanpy/util/` に一元化されたユーティリティモジュールです。
+
+### 型安全ガード（`util.guards`）
+
+Pythonの動的型付けの弱点を補うため、タクティク適用の入口で型検証を行います。
+
+```python
+from zfc_leanpy.util import require_proof_state, require_tactic_string
+
+def apply_tactic(state, tactic_str):
+    state = require_proof_state(state, context="apply_tactic")   # ProofState でなければ TacticError
+    tactic_str = require_tactic_string(tactic_str, context="apply_tactic")
+    ...
+```
+
+型チェックに失敗すると、実際の型を含む詳細なエラーメッセージが `TacticError` として送出されます。
+
+### ログ整形（`util.log_fmt`）
+
+証明ステータスの表示を一元管理し、ANSI カラーで視認性を高めます。
+
+```python
+from zfc_leanpy.util import format_proof_status_tag, format_trusted_step_detail
+
+icon, tag = format_proof_status_tag("proved", [])
+# icon = "✓"（緑）, tag = "[fully sound]"（緑）
+
+icon, tag = format_proof_status_tag("trusted", ["apply_"])
+# icon = "⚠"（黄）, tag = "[trusted ⚠: 1 unverified step(s)]"（黄）
+
+detail = format_trusted_step_detail("apply_", "unknown hyp type")
+# "· unverified step: 'apply_' — unknown hyp type"
+```
+
+| ステータス | アイコン | タグ |
+|---|---|---|
+| `proved` | ✓（緑） | `[fully sound]` |
+| `trusted` | ⚠（黄） | `[trusted ⚠: N unverified step(s)]` |
+| `sorry` | ✗（赤） | `[sorry — no certificate]` |
 
 ---
 
@@ -343,6 +437,9 @@ zfc_leanpy/
 │   ├── cli/                    ← CLI
 │   │   ├── main.py
 │   │   └── runner.py
+│   ├── util/                   ← ユーティリティ（エラー処理・ログ整形）
+│   │   ├── guards.py           ←   require_proof_state / require_tactic_string
+│   │   └── log_fmt.py          ←   ANSI カラー / format_proof_status_tag
 │   ├── axioms.py               ← ZFC 公理（オプション）
 │   └── proof_engine.py         ← 命題論理デモ
 └── tests/
@@ -373,3 +470,35 @@ zfc_leanpy/
 ./.venv/bin/python -m pytest tests/test_decision_procedures.py -q
 ./.venv/bin/python -m pytest tests/test_tactics.py -q
 ```
+
+---
+
+## 今後の展望
+
+本プロジェクトは実験的なプロトタイプとして始まりましたが、以下の方向での発展を検討しています。
+
+### VS Code 拡張
+
+- `@theorem` / `Theorem` クラスの定義をリアルタイムで認識し、証明ステータス（`proved` / `trusted` / `sorry`）をエディタ内でインライン表示することを予定している。
+- タクティクの補完・ホバー説明を提供し、Lean 4 拡張に近い開発体験を Python ユーザーへ届けることを目指す。
+
+### 分散証明処理
+
+- 大規模な定理群を並列処理するため、証明タスクを分散ワーカーへ送信する機構の導入。
+- `ProofCertificate`（HMAC-SHA256）を活用した分散環境での証明書検証。
+
+### AI 連携（証明生成支援）
+
+- LLM（大規模言語モデル）を活用し、未証明ゴール（`sorry_()` 箇所）に対するタクティク候補を自動提案する。
+- `trusted` ステップを AI が補完・検証し、証明の完全性を段階的に高めるワークフローの構築。
+
+### 証明ツリーの可視化
+
+- 証明過程を有向グラフ（証明ツリー）として出力し、`trusted` 箇所をハイライト表示する。
+- JSON / DOT 形式での証明書エクスポートにより、他ツール（Lean / Coq）へのインポートを可能にする。
+
+### 静的型チェックの強化
+
+- `mypy` / `pyright` との統合により、動的型の弱点をさらに補う。
+- 型スタブの整備で、IDE での型推論補助を充実させる。
+
