@@ -103,7 +103,7 @@ def apply_tactic(state: ProofState, tactic: str) -> ProofState:
             return state
         for name, typ in state.hypotheses.items():
             hf = fparse(typ)
-            if hf is not None and feq(hf, goal):
+            if hf is not None and goal is not None and feq(hf, goal):
                 state.close_with(PVar(name))
                 return state
         raise TacticError("trivial: failed")
@@ -137,11 +137,11 @@ def apply_tactic(state: ProofState, tactic: str) -> ProofState:
         return state
 
     if tac.startswith("use "):
-        term = tac[len("use ") :].strip()
+        witness = tac[len("use ") :].strip()
         goal = fparse(state.current_goal() or "")
         if not isinstance(goal, FEx):
             raise TacticError("use: goal is not existential")
-        state.replace_goal(fstr(fsubst(goal.body, goal.var, term)))
+        state.replace_goal(fstr(fsubst(goal.body, goal.var, witness)))
         return state
 
     if tac.startswith("apply "):

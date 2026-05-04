@@ -26,7 +26,7 @@ def _tactics_to_str(tactics: list) -> list:
 # ── Theorem / Lemma ────────────────────────────────────────────────
 
 class _TheoremMeta(type):
-    def __new__(mcs, name, bases, namespace):
+    def __new__(mcs, name: str, bases: tuple, namespace: dict) -> type:
         cls = super().__new__(mcs, name, bases, namespace)
 
         # 直接の親に _TheoremMeta を持つクラスがなければ基底クラス自身なのでスキップ
@@ -73,7 +73,7 @@ class Lemma(metaclass=_TheoremMeta):
 # ── Axiom ─────────────────────────────────────────────────────────
 
 class _AxiomMeta(type):
-    def __new__(mcs, name, bases, namespace):
+    def __new__(mcs, name: str, bases: tuple, namespace: dict) -> type:
         cls = super().__new__(mcs, name, bases, namespace)
 
         meta_bases = [b for b in bases if isinstance(b, _AxiomMeta)]

@@ -6,6 +6,8 @@
         tactics = [intro("h"), constructor(), exact("h.2"), exact("h.1")]
 """
 
+from typing import Optional
+
 
 class Tactic:
     """タクティクオブジェクトの基底クラス。"""
@@ -17,7 +19,7 @@ class Tactic:
 # ── 基本タクティク ────────────────────────────────────────────────
 
 class intro(Tactic):
-    def __init__(self, name: str = None) -> None:
+    def __init__(self, name: Optional[str] = None) -> None:
         self.name = name
 
     def __str__(self) -> str:

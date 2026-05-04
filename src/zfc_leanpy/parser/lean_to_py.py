@@ -77,7 +77,7 @@ def lean_to_python(filepath: str) -> str:
     return "\n".join(lines)
 
 
-def convert_file(filepath: str, output: Optional[str] = None):
+def convert_file(filepath: str, output: Optional[str] = None) -> None:
     """Lean 4 ファイルを Python DSL コードに変換して出力する。"""
     code = lean_to_python(filepath)
     if output:

@@ -1,6 +1,9 @@
 """Prop — Python オブジェクトとして命題を構築するクラス。"""
 
-from ..formula import FAnd, FAll, FEx, FIff, FImpl, FNot, FOr, fparse, fstr
+from typing import Union
+
+from ..formula import FAnd, FAll, FEx, FIff, FImpl, FNot, FOr, FVar, fparse, fstr
+from ..formula.ast import _F
 
 
 class Prop:
@@ -12,12 +15,11 @@ class Prop:
         goal = (P & Q) >> (Q & P)   # P ∧ Q → Q ∧ P
     """
 
-    def __init__(self, expr: object) -> None:
+    def __init__(self, expr: "Union[str, _F]") -> None:
         if isinstance(expr, str):
             parsed = fparse(expr)
             # パース失敗なら命題変数として扱う
-            from ..formula import FVar
-            self._f = parsed if parsed is not None else FVar(expr)
+            self._f: _F = parsed if parsed is not None else FVar(expr)
         else:
             # すでに _F オブジェクト（内部用）
             self._f = expr

@@ -78,7 +78,7 @@ def python_to_lean(filepath: str) -> str:
     return registry_to_lean(registry)
 
 
-def python_file_to_lean(filepath: str, output: Optional[str] = None):
+def python_file_to_lean(filepath: str, output: Optional[str] = None) -> None:
     """Python DSL ファイルを Lean 4 形式に変換して出力する。"""
     code = python_to_lean(filepath)
     if output:
