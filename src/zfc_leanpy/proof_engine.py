@@ -8,30 +8,13 @@ ZFC 公理は含まない。axioms.py を import すれば ZFC 公理を追加�
     python -m zfc_leanpy.proof_engine
 """
 
-import sys
-
 from .dsl import theorem, get_registry, ProofState
 from .logger import get_logger
 from .tactics import apply_tactic
+from .util.log_fmt import format_proof_status_tag, format_trusted_step_detail
 
 
 logger = get_logger(__name__)
-
-
-# ---------------------------------------------------------------------------
-# ANSI color helpers (terminal-only)
-# ---------------------------------------------------------------------------
-
-def _color(code: str, text: str) -> str:
-    """Wrap *text* in an ANSI escape sequence when stdout is a real TTY."""
-    if sys.stdout.isatty():
-        return f"\033[{code}m{text}\033[0m"
-    return text
-
-
-_GREEN  = "32"
-_YELLOW = "33"
-_RED    = "31"
 
 
 # ---------------------------------------------------------------------------
@@ -114,19 +97,7 @@ def main():
     for name, entry in theorems.items():
         status = entry["status"]
         ts = entry.get("trusted_steps", [])
-        if status == "proved":
-            icon = _color(_GREEN, "✓")
-            tag  = _color(_GREEN, "[fully sound]")
-        elif status == "trusted":
-            icon = _color(_YELLOW, "⚠")
-            step_summary = ", ".join(ts) if ts else "unknown"
-            tag = _color(_YELLOW, f"[trusted ⚠: {step_summary}]")
-        elif status == "sorry":
-            icon = _color(_RED, "✗")
-            tag  = _color(_RED, "[sorry — no certificate]")
-        else:
-            icon = _color(_RED, "✗")
-            tag  = _color(_RED, f"[{status}]")
+        icon, tag = format_proof_status_tag(status, ts)
         logger.info("  %s %-24s %s", icon, name, tag)
         logger.info("      : %s", entry["statement"])
 
@@ -136,13 +107,7 @@ def main():
             reasons = entry.get("trusted_reasons", [])
             for i, step in enumerate(ts):
                 reason = reasons[i] if i < len(reasons) else ""
-                reason_text = f" — {reason}" if reason else ""
-                logger.info(
-                    "        %s unverified step: '%s'%s",
-                    _color(_YELLOW, "·"),
-                    step,
-                    reason_text,
-                )
+                logger.info("        %s", format_trusted_step_detail(step, reason))
 
     logger.info("\n%s", "=" * 60)
 

@@ -8,6 +8,7 @@ from ..formula import (
     feq, fparse, fstr, fsubst,
 )
 from ..kernel import ProofState, TacticError
+from ..util.guards import require_proof_state, require_tactic_string
 from .primitives import (
     do_apply,
     do_cases,
@@ -21,6 +22,8 @@ from .primitives import (
 
 
 def apply_tactic(state: ProofState, tactic: str) -> ProofState:
+    require_proof_state(state, "apply_tactic")
+    require_tactic_string(tactic, "apply_tactic")
     tac = normalize_tactic_text(tactic)
     if not tac or state.closed:
         return state
