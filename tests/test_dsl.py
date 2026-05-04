@@ -76,7 +76,8 @@ def test_noarg_function_style_is_treated_as_sorry():
 
 
 def test_trusted_status_is_separate_from_proved():
-    @theorem("trusted_apply", "(P → Q) → ¬Q → ¬P", tactics=["intro hpq hnq hp", "apply hnq", "apply hpq", "exact hp"])
+    # `have h2 : Q := h` is an inline proof term — always a trusted step.
+    @theorem("trusted_apply", "P → Q", tactics=["intro h", "have h2 : Q := h", "exact h2"])
     def _():
         pass
 

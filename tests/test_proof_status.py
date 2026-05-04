@@ -95,10 +95,11 @@ class TestGetProofSummarySorry:
 
 class TestGetProofSummaryTrusted:
     def test_trusted_cannot_issue_certificate(self):
+        # `have h2 : Q := h` is an inline proof term — always a trusted step.
         @theorem(
             "ps_trusted",
-            "(P → Q) → ¬Q → ¬P",
-            tactics=["intro hpq hnq hp", "apply hnq", "apply hpq", "exact hp"],
+            "P → Q",
+            tactics=["intro h", "have h2 : Q := h", "exact h2"],
         )
         def _():
             pass
@@ -112,8 +113,8 @@ class TestGetProofSummaryTrusted:
     def test_trusted_error_message_contains_trusted_tag(self):
         @theorem(
             "ps_trusted_msg",
-            "(P → Q) → ¬Q → ¬P",
-            tactics=["intro hpq hnq hp", "apply hnq", "apply hpq", "exact hp"],
+            "P → Q",
+            tactics=["intro h", "have h2 : Q := h", "exact h2"],
         )
         def _():
             pass
@@ -125,8 +126,8 @@ class TestGetProofSummaryTrusted:
     def test_trusted_steps_are_listed(self):
         @theorem(
             "ps_trusted_steps",
-            "(P → Q) → ¬Q → ¬P",
-            tactics=["intro hpq hnq hp", "apply hnq", "apply hpq", "exact hp"],
+            "P → Q",
+            tactics=["intro h", "have h2 : Q := h", "exact h2"],
         )
         def _():
             pass
@@ -137,8 +138,8 @@ class TestGetProofSummaryTrusted:
     def test_trusted_certificate_in_registry_is_none(self):
         @theorem(
             "ps_trusted_cert",
-            "(P → Q) → ¬Q → ¬P",
-            tactics=["intro hpq hnq hp", "apply hnq", "apply hpq", "exact hp"],
+            "P → Q",
+            tactics=["intro h", "have h2 : Q := h", "exact h2"],
         )
         def _():
             pass
@@ -186,10 +187,11 @@ class TestCertificateBlocking:
         assert reg["certificate"] is None
 
     def test_trusted_no_certificate(self):
+        # `have h2 : Q := h` is an inline proof term — always a trusted step.
         @theorem(
             "cb_trusted",
-            "(P → Q) → ¬Q → ¬P",
-            tactics=["intro hpq hnq hp", "apply hnq", "apply hpq", "exact hp"],
+            "P → Q",
+            tactics=["intro h", "have h2 : Q := h", "exact h2"],
         )
         def _():
             pass
@@ -204,11 +206,12 @@ class TestCertificateBlocking:
 
 class TestTacticLevelLogging:
     def test_trusted_tactic_emits_warning(self, caplog):
+        # `have h2 : Q := h` is an inline proof term — always emits TRUSTED warning.
         with caplog.at_level(logging.WARNING, logger="zfc_leanpy"):
             @theorem(
                 "log_trusted",
-                "(P → Q) → ¬Q → ¬P",
-                tactics=["intro hpq hnq hp", "apply hnq", "apply hpq", "exact hp"],
+                "P → Q",
+                tactics=["intro h", "have h2 : Q := h", "exact h2"],
             )
             def _():
                 pass
@@ -265,11 +268,12 @@ class TestDecoratorStatusLogging:
         assert len(sorry_logs) > 0
 
     def test_trusted_decorator_logs_trusted_marker(self, caplog):
+        # `have h2 : Q := h` is an inline proof term — always a trusted step.
         with caplog.at_level(logging.WARNING, logger="zfc_leanpy"):
             @theorem(
                 "dl_trusted",
-                "(P → Q) → ¬Q → ¬P",
-                tactics=["intro hpq hnq hp", "apply hnq", "apply hpq", "exact hp"],
+                "P → Q",
+                tactics=["intro h", "have h2 : Q := h", "exact h2"],
             )
             def _():
                 pass

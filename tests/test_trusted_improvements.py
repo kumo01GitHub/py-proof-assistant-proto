@@ -178,11 +178,12 @@ class TestTrustedReasons:
 class TestReasonInLog:
     def test_log_includes_reason(self, caplog):
         """The [TRUSTED ⚠] log line includes the reason for the fallback."""
+        # `apply h` where h : P and goal : Q — conclusion mismatch → trusted fallback.
         with caplog.at_level(logging.WARNING, logger="zfc_leanpy"):
             @theorem(
                 "log_reason_test",
-                "(P → Q) → ¬Q → ¬P",
-                tactics=["intro hpq hnq hp", "apply hnq", "apply hpq", "exact hp"],
+                "P → Q",
+                tactics=["intro h", "apply h"],
             )
             def _():
                 pass
@@ -194,11 +195,12 @@ class TestReasonInLog:
 
     def test_log_includes_suggestion(self, caplog):
         """The [TRUSTED ⚠] log line includes a suggestion for resolution."""
+        # `have h2 : Q := h` — inline proof term → trusted fallback with suggestion.
         with caplog.at_level(logging.WARNING, logger="zfc_leanpy"):
             @theorem(
                 "log_suggestion_test",
-                "P → P → P",
-                tactics=["intro h1 h2", "apply h1"],
+                "P → Q",
+                tactics=["intro h", "have h2 : Q := h", "exact h2"],
             )
             def _():
                 pass
@@ -215,3 +217,103 @@ class TestReasonInLog:
 
         sorry_warnings = [r for r in caplog.records if "[SORRY" in r.message]
         assert len(sorry_warnings) > 0
+
+
+# ──────────────────────────────────────────────────────────────────
+# Trusted reduction — apply now kernel-verifies backward application
+# ──────────────────────────────────────────────────────────────────
+
+class TestApplyTrustedReduction:
+    def test_apply_impl_no_trusted_mark(self):
+        """apply h where h : A → B and goal B reduces goal to A without trusted."""
+        s = ProofState("Q", {"h": "P → Q"})
+        s = apply_tactic(s, "apply h")
+        assert not s.trusted_steps
+        assert not s.closed
+        assert s.current_goal() == "P"
+
+    def test_apply_not_false_no_trusted_mark(self):
+        """apply h where h : ¬P and goal False reduces goal to P without trusted."""
+        s = ProofState("False", {"h": "¬P"})
+        s = apply_tactic(s, "apply h")
+        assert not s.trusted_steps
+        assert not s.closed
+        assert s.current_goal() == "P"
+
+    def test_apply_exact_match_closes_kernel_verified(self):
+        """apply h where h : P and goal P closes the proof kernel-verified."""
+        s = ProofState("P", {"h": "P"})
+        s = apply_tactic(s, "apply h")
+        assert s.closed
+        assert not s.trusted_steps
+
+    def test_modus_tollens_is_now_proved(self):
+        """(P → Q) → ¬Q → ¬P is now fully kernel-verified (no trusted steps)."""
+        @theorem(
+            "modus_tollens",
+            "(P → Q) → ¬Q → ¬P",
+            tactics=["intro hpq hnq hp", "apply hnq", "apply hpq", "exact hp"],
+        )
+        def _():
+            pass
+
+        summary = get_proof_summary("modus_tollens")
+        assert summary["status"] == "proved"
+        assert summary["trusted_steps"] == []
+        assert summary["can_issue_certificate"] is True
+
+    def test_apply_mismatch_still_trusted(self):
+        """apply h where conclusion does not match goal is still trusted."""
+        s = ProofState("Q", {"h": "P → P"})
+        s = apply_tactic(s, "apply h")
+        assert len(s.trusted_steps) == 1
+
+    def test_apply_exact_match_p_to_p_to_p(self):
+        """P → P → P with 'intro h1 h2, apply h1' is now proved."""
+        @theorem(
+            "apply_exact_match",
+            "P → P → P",
+            tactics=["intro h1 h2", "apply h1"],
+        )
+        def _():
+            pass
+
+        summary = get_proof_summary("apply_exact_match")
+        assert summary["status"] == "proved"
+        assert summary["trusted_steps"] == []
+
+
+# ──────────────────────────────────────────────────────────────────
+# Type guards — require_proof_state / require_tactic_string
+# ──────────────────────────────────────────────────────────────────
+
+class TestTypeGuards:
+    def test_apply_tactic_rejects_non_proof_state(self):
+        """apply_tactic raises TacticError when state is not ProofState."""
+        from zfc_leanpy.kernel import TacticError
+        with pytest.raises(TacticError, match="type guard failed"):
+            apply_tactic("not a state", "intro h")  # type: ignore[arg-type]
+
+    def test_apply_tactic_rejects_non_string_tactic(self):
+        """apply_tactic raises TacticError when tactic is not a string."""
+        from zfc_leanpy.kernel import TacticError
+        with pytest.raises(TacticError, match="type guard failed"):
+            apply_tactic(ProofState("P"), 42)  # type: ignore[arg-type]
+
+    def test_require_proof_state_passes_for_valid(self):
+        """require_proof_state returns the state unchanged when valid."""
+        from zfc_leanpy.util.guards import require_proof_state
+        s = ProofState("P")
+        assert require_proof_state(s) is s
+
+    def test_require_tactic_string_passes_for_valid(self):
+        """require_tactic_string returns the string unchanged when valid."""
+        from zfc_leanpy.util.guards import require_tactic_string
+        assert require_tactic_string("intro h") == "intro h"
+
+    def test_require_proof_state_includes_context_in_error(self):
+        """require_proof_state error message includes the context label."""
+        from zfc_leanpy.kernel import TacticError
+        from zfc_leanpy.util.guards import require_proof_state
+        with pytest.raises(TacticError, match=r"my_context"):
+            require_proof_state(None, context="my_context")
