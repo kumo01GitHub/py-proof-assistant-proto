@@ -100,15 +100,10 @@ def main():
         icon, tag = format_proof_status_tag(status, ts)
         logger.info("  %s %-24s %s", icon, name, tag)
         logger.info("      : %s", entry["statement"])
-
-        # Emit per-step trusted details at DEBUG level so developers can
-        # inspect which tactics fell back to the unverified path and why,
-        # without flowing proof-internal step names into INFO-level sinks.
-        if status == "trusted" and ts:
-            reasons = entry.get("trusted_reasons", [])
-            for i, step in enumerate(ts):
-                reason = reasons[i] if i < len(reasons) else ""
-                logger.debug("        %s", format_trusted_step_detail(step, reason))
+        if status == "trusted":
+            logger.info(
+                "          (call get_proof_summary(%r) for per-step details)", name
+            )
 
     logger.info("\n%s", "=" * 60)
 
