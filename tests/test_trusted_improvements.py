@@ -98,10 +98,9 @@ class TestRwEquality:
     def test_rw_transforms_goal(self):
         """rw [h] where h : a = b rewrites 'a = c' to 'b = c' (goal changed)."""
         s = ProofState("a = c", {"h": "a = b"})
-        before_goals = list(s.goals)
         s = apply_tactic(s, "rw [h]")
         assert not s.closed  # still needs to prove b = c
-        assert "b = c" == s.current_goal() or "c" in s.current_goal()
+        assert s.current_goal() == "b = c"
         assert not s.trusted_steps
 
     def test_rw_missing_rule_falls_back_to_trusted_with_reason(self):
@@ -207,7 +206,7 @@ class TestReasonInLog:
         trusted_warnings = [r for r in caplog.records if "[TRUSTED" in r.message]
         assert any("Suggestion" in r.message for r in trusted_warnings)
 
-    def test_sorry_log_uses_new_icon(self, caplog):
+    def test_sorry_log_has_cross_icon(self, caplog):
         """The [SORRY ✗] marker appears for admitted proofs."""
         with caplog.at_level(logging.WARNING, logger="zfc_leanpy"):
             @theorem("log_sorry_icon", "P", tactics=["sorry"])

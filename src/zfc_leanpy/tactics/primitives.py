@@ -261,7 +261,7 @@ def do_rw(state: ProofState, rules_text: str) -> ProofState:
 
     for rule in rules:
         backwards = rule.startswith("←") or rule.startswith("<-")
-        rule_name = rule.lstrip("←").lstrip("<-").strip()
+        rule_name = rule.strip().lstrip("←").lstrip("<-").strip()
 
         hyp_type_str = state.hypotheses.get(rule_name)
         if hyp_type_str is None:
