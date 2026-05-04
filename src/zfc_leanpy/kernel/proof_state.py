@@ -17,6 +17,7 @@ class ProofState:
         self.admitted: bool = False
         self.closed: bool = False
         self.trusted_steps: List[str] = []
+        self.trusted_reasons: List[str] = []
         self.tactic_trace: List[str] = []
 
     @property
@@ -123,5 +124,6 @@ class ProofState:
         s.admitted = self.admitted
         s.closed = self.closed
         s.trusted_steps = list(self.trusted_steps)
+        s.trusted_reasons = list(self.trusted_reasons)
         s.tactic_trace = list(self.tactic_trace)
         return s

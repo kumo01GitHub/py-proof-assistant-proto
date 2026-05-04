@@ -84,6 +84,7 @@ def _register_with_proof(
         "statement": statement,
         "status": status,
         "trusted_steps": list(state.trusted_steps),
+        "trusted_reasons": list(state.trusted_reasons),
         "tactics": replay_source,
         "certificate": certificate,
         "replay_ok": replay_ok,

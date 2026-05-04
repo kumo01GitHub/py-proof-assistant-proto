@@ -213,7 +213,7 @@ class TestTacticLevelLogging:
             def _():
                 pass
 
-        trusted_warnings = [r for r in caplog.records if "[TRUSTED]" in r.message]
+        trusted_warnings = [r for r in caplog.records if "[TRUSTED" in r.message]
         assert len(trusted_warnings) > 0
         # Log contains count, not raw step names (to avoid taint flow to logging sinks)
         assert any("unverified step" in r.message for r in trusted_warnings)
@@ -224,7 +224,7 @@ class TestTacticLevelLogging:
             def _():
                 pass
 
-        sorry_warnings = [r for r in caplog.records if "[SORRY]" in r.message]
+        sorry_warnings = [r for r in caplog.records if "[SORRY" in r.message]
         assert len(sorry_warnings) > 0
 
     def test_proved_tactic_no_trusted_warning(self, caplog):
@@ -234,7 +234,7 @@ class TestTacticLevelLogging:
             def _():
                 pass
 
-        trusted_warnings = [r for r in caplog.records if "[TRUSTED]" in r.message]
+        trusted_warnings = [r for r in caplog.records if "[TRUSTED" in r.message]
         assert len(trusted_warnings) == 0
 
 
