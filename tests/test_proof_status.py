@@ -4,7 +4,7 @@ Covers the short/medium-term improvements:
 - get_proof_summary returns detailed categorization for proved/trusted/sorry/incomplete
 - Per-tactic [TRUSTED] / [SORRY] warnings are emitted during proof execution
 - @theorem decorator logs the proof outcome with explicit status markers
-- trusted_steps is a list of dicts with {index, tactic, reason, suggestion, goal}
+- trusted_steps is a list of dicts with keys: index, tactic, reason, suggestion, goal
 - get_proof_summary exposes first_trusted_step_index and first_trusted_goal
 """
 
