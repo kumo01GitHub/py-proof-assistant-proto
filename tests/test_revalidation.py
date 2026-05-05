@@ -101,16 +101,8 @@ class TestRevalidateProofUpgrade:
         assert result is None
 
     def test_revalidate_trusted_to_proved(self):
-        """revalidate_proof upgrades a trusted proof to proved with correct tactics."""
-        # Register a trusted proof first (wrong tactics).
-        @theorem("rv_trusted", "P → P", tactics=["intro h", "apply h"])
-        def _():
-            pass
-
-        initial = get_proof_summary("rv_trusted")
-        assert initial["status"] == "proved"  # apply h closes P→P proved
-
-        # Now register a proof that will be trusted (apply with mismatch).
+        """revalidate_proof on a trusted proof does not produce proved if tactics still fail."""
+        # Register a proof that will be trusted (apply with type mismatch).
         @theorem("rv_trusted2", "P → Q", tactics=["intro h", "apply h"])
         def _():
             pass
@@ -118,29 +110,16 @@ class TestRevalidateProofUpgrade:
         initial2 = get_proof_summary("rv_trusted2")
         assert initial2["status"] == "trusted"
 
-        # Revalidate is NOT expected to pass here because we can't close P → Q
-        # without sorry; revalidate with tactics that are still fallback.
+        # Revalidate with tactics that still fall back — proof cannot be closed
+        # kernel-verified because P → Q cannot be proved without an axiom.
         result = revalidate_proof("rv_trusted2", ["intro h", "apply h"])
         assert result is not None
         assert result["status"] == "trusted"  # still trusted
 
     def test_revalidate_produces_proved_for_correct_tactics(self):
         """revalidate_proof upgrades trusted → proved when given correct tactics."""
-        # Register a proof that would be trusted (we force a trusted scenario).
-        @theorem(
-            "rv_upgrade",
-            "P → Q",
-            tactics=["intro h", "have h2 : Q := h", "exact h2"],
-        )
-        def _():
-            pass
-
-        initial = get_proof_summary("rv_upgrade")
-        assert initial["status"] == "trusted"
-
-        # There's no way to prove P → Q without assuming Q ≡ P or using sorry,
-        # so we prove a different theorem for the upgrade scenario.
-        # Instead use a theorem that can be revalidated.
+        # Register a proof that will be trusted because 'have h2 : P := h'
+        # uses an inline proof term that the kernel cannot structurally verify.
         @theorem(
             "rv_upgrade_valid",
             "P → P",
@@ -149,7 +128,7 @@ class TestRevalidateProofUpgrade:
         def _():
             pass
 
-        # This is trusted (have with inline proof term).
+        # Confirm the initial status is trusted.
         initial_valid = get_proof_summary("rv_upgrade_valid")
         assert initial_valid["status"] == "trusted"
 
@@ -210,7 +189,12 @@ class TestRevalidateInapplicable:
         assert result["status"] == "proved"
 
     def test_revalidate_sorry_not_upgraded_with_broken_tactics(self):
-        """revalidate_proof on a sorry entry attempts revalidation; fails if tactics are wrong."""
+        """revalidate_proof on a sorry entry attempts revalidation with new tactics.
+
+        A sorry proof is treated like any incomplete entry: if the new tactics
+        produce a kernel-verified closure, the status is upgraded to proved.
+        If the tactics are incorrect, the status reflects the revalidation result.
+        """
         @theorem("rv_sorry", "P", tactics=["sorry"])
         def _():
             pass

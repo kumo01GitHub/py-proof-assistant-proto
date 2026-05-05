@@ -125,16 +125,16 @@ def state_to_status(
 
 
 def revalidate_proof(name: str, new_tactics: List[str]) -> Optional[Dict]:
-    """Attempt to upgrade a ``trusted`` proof entry to ``proved`` using new tactics.
+    """Attempt to upgrade a proof entry to ``proved`` by replaying new tactics.
 
     Reruns *new_tactics* against the proof's statement and, if they produce a
     fully kernel-verified closure (no admitted or trusted steps), updates the
     registry entry's status to ``"proved"`` and issues a
     :class:`~zfc_leanpy.dsl.certificate.ProofCertificate`.
 
-    This implements the *auto-revalidation* gate: a trusted proof can be
-    upgraded at any point — including from a separate module — by supplying a
-    complete, kernel-verifiable tactic list.
+    This implements the *auto-revalidation* gate: a ``trusted`` or ``sorry``
+    proof can be upgraded at any point — including from a separate module — by
+    supplying a complete, kernel-verifiable tactic list.
 
     Args:
         name: Registry name of the proof entry to revalidate.
@@ -145,7 +145,7 @@ def revalidate_proof(name: str, new_tactics: List[str]) -> Optional[Dict]:
         Updated :func:`get_proof_summary` dict on success or when the entry
         already has status ``"proved"``.  Returns ``None`` when *name* is not
         found in the registry.  Returns the existing summary unchanged when the
-        entry's status is ``"sorry"`` or ``"axiom"`` (revalidation does not
+        entry's status is ``"axiom"`` or ``"defined"`` (revalidation does not
         apply to those).
 
     Logs:
