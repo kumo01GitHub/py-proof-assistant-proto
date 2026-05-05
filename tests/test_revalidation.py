@@ -43,12 +43,12 @@ class TestTrustedSuggestions:
         assert len(snap.trusted_suggestions) == 1
 
     def test_trusted_suggestions_populated_after_trusted_tactic(self, caplog):
-        """trusted_suggestions is populated when a tactic falls back to trusted."""
+        """trusted_suggestions is populated when a tactic explicitly uses a trusted step."""
         with caplog.at_level(logging.WARNING, logger="zfc_leanpy"):
             @theorem(
                 "sugg_trusted",
-                "P → Q",
-                tactics=["intro h", "apply h"],
+                "P → P",
+                tactics=["intro h", "have h2 : P := h", "exact h2"],
             )
             def _():
                 pass
@@ -102,8 +102,8 @@ class TestRevalidateProofUpgrade:
 
     def test_revalidate_trusted_to_proved(self):
         """revalidate_proof on a trusted proof does not produce proved if tactics still fail."""
-        # Register a proof that will be trusted (apply with type mismatch).
-        @theorem("rv_trusted2", "P → Q", tactics=["intro h", "apply h"])
+        # Register a proof that will be trusted (inline proof term).
+        @theorem("rv_trusted2", "P → P", tactics=["intro h", "have h2 : P := h", "exact h2"])
         def _():
             pass
 
@@ -111,8 +111,8 @@ class TestRevalidateProofUpgrade:
         assert initial2["status"] == "trusted"
 
         # Revalidate with tactics that still fall back — proof cannot be closed
-        # kernel-verified because P → Q cannot be proved without an axiom.
-        result = revalidate_proof("rv_trusted2", ["intro h", "apply h"])
+        # kernel-verified because the inline proof term still goes through trusted.
+        result = revalidate_proof("rv_trusted2", ["intro h", "have h2 : P := h", "exact h2"])
         assert result is not None
         assert result["status"] == "trusted"  # still trusted
 

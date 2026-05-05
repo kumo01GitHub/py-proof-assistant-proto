@@ -131,8 +131,12 @@ get_registry()          # 全登録エントリの immutable view（MappingProxy
 | ステータス | 条件 |
 |---|---|
 | `proved` | 全ステップが `type_check()` を通過し、リプレイが成功した |
-| `trusted` | 一部ステップが `type_check()` を通らず無検査で受け入れられた |
+| `trusted` | `have h := expr` など**明示的な** trusted ステップを含む |
 | `sorry` | `sorry_()` タクティクを含む |
+| `incomplete` | タクティクが `TacticError` で停止し、ゴールが残っている |
+
+`incomplete` 状態のときは、タクティクのエラーメッセージを確認して修正してください。
+証明をとりあえずスキップしたい場合は、`sorry` を明示的に使用することで `sorry` ステータスにできます。
 
 `revalidate_proof(name, new_tactics)` を使うと、`trusted` / `sorry` 状態の証明に改良版のタクティクを再適用し、カーネル検証が通れば `proved` へ昇格できます。
 
@@ -201,7 +205,7 @@ tactics = ["intro h", "constructor", "exact h.1"]
 
 ### 決定手続きタクティク（fully sound）
 
-成功すれば `status = "proved"`、失敗時のみ `trusted` にフォールバックします。
+成功すれば `status = "proved"`、検証不能なゴールには `TacticError` で停止します（trusted フォールバックしません）。
 
 | タクティク | 決定手続き | 証明項 |
 |---|---|---|
@@ -220,12 +224,15 @@ class LinearFact(Theorem):
     tactics = [omega()]   # n >= 0 が仮説にあれば proved
 ```
 
-### trusted タクティク（型を追いきれないため一部無検査）
+### タクティクと検証動作
 
-`apply_()` / `cases()` / `rcases()` / `have()` / `rw()` / `contradiction()`
+`apply_()` / `cases()` / `rcases()` / `rw()` / `contradiction()` / `ring()` / `norm_num()` / `omega()` / `simp()`
 
-これらのタクティクは、仮説の型追跡が困難なケースに限り `trusted_close()` で受け入れます。
-`ProofState.trusted_steps` と `trusted_reasons` に記録され、`get_proof_summary()` で確認できます。
+これらのタクティクは、検証不能なケース（仮説が存在しない、型が合わない、等式でないなど）では **`TacticError` を投げて停止します**。
+暗黙の trusted フォールバックは行いません。証明を一時的にスキップしたい場合は `sorry` を明示的に使用してください。
+
+**`trusted` ステータスになる唯一の明示的タクティク**:
+- `have h : T := expr` — 証明項を検証しない即時仮説導入
 
 ```python
 from zfc_leanpy.dsl import get_proof_summary
@@ -236,11 +243,11 @@ summary = get_proof_summary("MyTheorem")
 #   'kind': 'theorem',
 #   'status': 'trusted',
 #   'can_issue_certificate': False,
-#   'trusted_steps': ['apply_'],
-#   'trusted_reasons': ['unknown hyp type'],
-#   'trusted_suggestions': ['ensure the hypothesis has type A → B ...'],
+#   'trusted_steps': ['have :='],
+#   'trusted_reasons': ['proof term is not kernel-verified ...'],
+#   'trusted_suggestions': ['replace with a have : T sub-goal ...'],
 #   'replay_ok': False,
-#   'error_message': "[TRUSTED] 'MyTheorem' has unverified tactic steps: apply_. ..."
+#   'error_message': "[TRUSTED] 'MyTheorem' has unverified tactic steps: have :=. ..."
 # }
 ```
 

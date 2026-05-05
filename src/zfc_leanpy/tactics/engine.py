@@ -16,7 +16,6 @@ from .primitives import (
     do_rw,
     normalize_tactic_text,
     parse_proof_term,
-    trusted_close,
     try_kernel_close_simple,
 )
 
@@ -66,11 +65,9 @@ def apply_tactic(state: ProofState, tactic: str) -> ProofState:
             return state
         if expr in state.hypotheses:
             raise TacticError(f"exact: failed to build proof term for '{expr}'")
-        return trusted_close(
-            state,
-            f"exact {expr}",
-            f"cannot build a kernel proof term for '{expr}'; "
-            "only simple variable references and '.1'/'.2' projections are supported",
+        raise TacticError(
+            f"exact: cannot build a kernel proof term for '{expr}'; "
+            "only simple variable references and '.1'/'.2' projections are supported"
         )
 
     if tac == "assumption":
@@ -170,11 +167,9 @@ def apply_tactic(state: ProofState, tactic: str) -> ProofState:
     if tac == "contradiction":
         if try_kernel_close_simple(state):
             return state
-        return trusted_close(
-            state,
-            "contradiction",
-            "no matching False hypothesis or contradictory pair found in proof context; "
-            "the kernel cannot verify this step automatically",
+        raise TacticError(
+            "contradiction: no matching False hypothesis or contradictory pair found in "
+            "proof context; introduce a hypothesis that is False or directly contradicts another"
         )
 
     if tac == "ring":
@@ -187,11 +182,9 @@ def apply_tactic(state: ProofState, tactic: str) -> ProofState:
                 return state
             except TacticError:
                 pass
-        return trusted_close(
-            state,
-            "ring",
-            "goal is not a verifiable ring equality; "
-            "ring works on equalities between ring expressions (e.g. 'a * b = b * a')",
+        raise TacticError(
+            "ring: goal is not a verifiable ring equality; "
+            "ring works on equalities between ring expressions (e.g. 'a * b = b * a')"
         )
 
     if tac == "norm_num":
@@ -204,11 +197,9 @@ def apply_tactic(state: ProofState, tactic: str) -> ProofState:
                 return state
             except TacticError:
                 pass
-        return trusted_close(
-            state,
-            "norm_num",
-            "goal is not a verifiable numeric equality; "
-            "norm_num works on equalities between numeric literals (e.g. '2 + 3 = 5')",
+        raise TacticError(
+            "norm_num: goal is not a verifiable numeric equality; "
+            "norm_num works on equalities between numeric literals (e.g. '2 + 3 = 5')"
         )
 
     if tac == "omega":
@@ -220,11 +211,9 @@ def apply_tactic(state: ProofState, tactic: str) -> ProofState:
             return state
         except TacticError:
             pass
-        return trusted_close(
-            state,
-            "omega",
-            f"linear arithmetic decision procedure could not verify '{goal_str}'; "
-            "omega works on linear integer/natural number goals",
+        raise TacticError(
+            f"omega: linear arithmetic decision procedure could not verify '{goal_str}'; "
+            "omega works on linear integer/natural number goals"
         )
 
     if tac.startswith("simp"):
@@ -236,11 +225,9 @@ def apply_tactic(state: ProofState, tactic: str) -> ProofState:
             return state
         except TacticError:
             pass
-        return trusted_close(
-            state,
-            "simp",
-            f"simplification could not close '{goal_str}' kernel-verified; "
-            "consider breaking the goal down with constructor/cases before calling simp",
+        raise TacticError(
+            f"simp: simplification could not close '{goal_str}' kernel-verified; "
+            "consider breaking the goal down with constructor/cases before calling simp"
         )
 
     if tac.startswith("rw"):
@@ -252,11 +239,9 @@ def apply_tactic(state: ProofState, tactic: str) -> ProofState:
     if tac in ("cases", "rcases"):
         if try_kernel_close_simple(state):
             return state
-        return trusted_close(
-            state,
-            tac,
-            f"'{tac}' without a hypothesis name — usage: '{tac} <hyp>'; "
-            "the kernel cannot perform anonymous case splitting",
+        raise TacticError(
+            f"{tac}: no hypothesis name provided — usage: '{tac} <hyp>'; "
+            "the kernel cannot perform anonymous case splitting"
         )
 
     if tac.startswith("cases ") or tac.startswith("rcases "):
