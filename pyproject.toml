@@ -22,6 +22,39 @@ check_untyped_defs = true
 no_implicit_optional = true
 packages = ["zfc_leanpy"]
 
+# Strict mode for the trust-critical core modules.
+# These modules implement the proof kernel, formula AST, type-checker, and
+# tactic layer — correctness here is essential, so all strict mypy checks apply.
+[[tool.mypy.overrides]]
+module = [
+    "zfc_leanpy.kernel",
+    "zfc_leanpy.kernel.*",
+    "zfc_leanpy.formula",
+    "zfc_leanpy.formula.*",
+    "zfc_leanpy.tactics",
+    "zfc_leanpy.tactics.*",
+    "zfc_leanpy.proof_engine",
+]
+strict = true
+
+# Relaxed mode for experimental and DSL/parser/CLI modules.
+# These modules handle user-facing proof scripting, Lean-compatible parsing,
+# and CLI tooling — they are under active experimentation and use dynamic
+# typing patterns (e.g. bare generics, Callable without parameters) that are
+# intentional.  Core type-safety checks are still enforced via the global
+# settings above.
+[[tool.mypy.overrides]]
+module = [
+    "zfc_leanpy.dsl",
+    "zfc_leanpy.dsl.*",
+    "zfc_leanpy.parser",
+    "zfc_leanpy.parser.*",
+    "zfc_leanpy.cli",
+    "zfc_leanpy.cli.*",
+]
+strict = false
+disallow_any_generics = false
+
 [project.scripts]
 zfc_leanpy = "zfc_leanpy.cli:main"
 
