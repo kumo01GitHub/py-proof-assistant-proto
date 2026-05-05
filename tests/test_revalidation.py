@@ -1,7 +1,7 @@
 """Tests for the revalidate_proof() auto-revalidation feature.
 
 Covers:
-- trusted_suggestions field in ProofState and get_proof_summary()
+- trusted_steps field in ProofState and get_proof_summary() as list of dicts
 - revalidate_proof() upgrading a trusted proof to proved
 - revalidate_proof() when new tactics still leave trusted steps
 - revalidate_proof() for non-existent and non-applicable statuses
@@ -22,28 +22,28 @@ from zfc_leanpy.tactics import apply_tactic
 
 
 # ──────────────────────────────────────────────────────────────────
-# trusted_suggestions field in ProofState
+# trusted_steps field in ProofState
 # ──────────────────────────────────────────────────────────────────
 
-class TestTrustedSuggestions:
-    def test_proof_state_has_trusted_suggestions_field(self):
-        """ProofState initialises with an empty trusted_suggestions list."""
+class TestTrustedSteps:
+    def test_proof_state_has_trusted_steps_field(self):
+        """ProofState initialises with an empty trusted_steps list."""
         s = ProofState("P")
-        assert hasattr(s, "trusted_suggestions")
-        assert s.trusted_suggestions == []
+        assert hasattr(s, "trusted_steps")
+        assert s.trusted_steps == []
 
-    def test_snapshot_copies_trusted_suggestions(self):
-        """snapshot() preserves trusted_suggestions."""
+    def test_snapshot_copies_trusted_steps(self):
+        """snapshot() preserves trusted_steps as independent copy."""
         s = ProofState("P")
-        s.trusted_suggestions.append("some suggestion")
+        s.trusted_steps.append({"index": 1, "tactic": "t", "reason": "r", "suggestion": "s", "goal": "G"})
         snap = s.snapshot()
-        assert snap.trusted_suggestions == ["some suggestion"]
+        assert len(snap.trusted_steps) == 1
         # Mutation of original should not affect snapshot.
-        s.trusted_suggestions.append("another")
-        assert len(snap.trusted_suggestions) == 1
+        s.trusted_steps.append({"index": 2, "tactic": "t2", "reason": "", "suggestion": "", "goal": ""})
+        assert len(snap.trusted_steps) == 1
 
-    def test_trusted_suggestions_populated_after_trusted_tactic(self, caplog):
-        """trusted_suggestions is populated when a tactic explicitly uses a trusted step."""
+    def test_trusted_steps_populated_after_trusted_tactic(self, caplog):
+        """trusted_steps is populated when a tactic explicitly uses a trusted step."""
         with caplog.at_level(logging.WARNING, logger="zfc_leanpy"):
             @theorem(
                 "sugg_trusted",
@@ -55,22 +55,23 @@ class TestTrustedSuggestions:
 
         summary = get_proof_summary("sugg_trusted")
         assert summary["status"] == "trusted"
-        assert len(summary["trusted_suggestions"]) == len(summary["trusted_steps"])
-        # Suggestion must be a non-empty string.
-        assert all(isinstance(s, str) and s for s in summary["trusted_suggestions"])
+        assert len(summary["trusted_steps"]) > 0
+        step = summary["trusted_steps"][0]
+        # Each step is a dict with required keys.
+        assert isinstance(step["suggestion"], str) and step["suggestion"]
 
-    def test_proved_proof_has_empty_trusted_suggestions(self):
-        """A fully proved theorem has no trusted_suggestions."""
+    def test_proved_proof_has_empty_trusted_steps(self):
+        """A fully proved theorem has no trusted_steps."""
         @theorem("sugg_proved", "P → P", tactics=["intro h", "exact h"])
         def _():
             pass
 
         summary = get_proof_summary("sugg_proved")
         assert summary["status"] == "proved"
-        assert summary["trusted_suggestions"] == []
+        assert summary["trusted_steps"] == []
 
     def test_suggestion_in_summary_matches_log(self, caplog):
-        """Suggestion stored in summary matches the Suggestion logged in WARNING."""
+        """Suggestion stored in trusted_steps[0] matches the Suggestion logged in WARNING."""
         with caplog.at_level(logging.WARNING, logger="zfc_leanpy"):
             @theorem(
                 "sugg_match_log",
@@ -83,8 +84,8 @@ class TestTrustedSuggestions:
         summary = get_proof_summary("sugg_match_log")
         trusted_warnings = [r for r in caplog.records if "[TRUSTED" in r.message]
         assert trusted_warnings, "Expected at least one TRUSTED warning"
-        # The suggestion in the log and in the summary should agree.
-        logged_suggestion_fragment = summary["trusted_suggestions"][0][:20]
+        # The suggestion in the summary's first trusted step should appear in the log.
+        logged_suggestion_fragment = summary["trusted_steps"][0]["suggestion"][:20]
         assert any(
             logged_suggestion_fragment in r.message for r in trusted_warnings
         )
@@ -136,9 +137,7 @@ class TestRevalidateProofUpgrade:
         result = revalidate_proof("rv_upgrade_valid", ["intro h", "exact h"])
         assert result is not None
         assert result["status"] == "proved"
-        assert result["can_issue_certificate"] is True
         assert result["trusted_steps"] == []
-        assert result["trusted_suggestions"] == []
 
     def test_revalidate_updates_registry_entry(self):
         """After revalidate_proof succeeds, get_proof_summary reflects proved status."""
@@ -252,5 +251,4 @@ class TestCrossModuleRevalidation:
         )
         assert upgraded is not None
         assert upgraded["status"] == "proved"
-        assert upgraded["can_issue_certificate"] is True
         assert upgraded["trusted_steps"] == []

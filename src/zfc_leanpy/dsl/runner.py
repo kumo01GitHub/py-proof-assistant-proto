@@ -1,7 +1,7 @@
 """Proof execution helpers used by theorem/lemma decorators."""
 
 import inspect
-from typing import Callable, List
+from typing import Any, Callable, Dict, List
 
 from ..kernel import ProofState, TacticError
 from ..logger import get_logger
@@ -11,38 +11,53 @@ from ..tactics import apply_tactic
 logger = get_logger(__name__)
 
 
-def _log_tactic_result(tac: str, before_trusted: int, state: ProofState) -> None:
+def _log_tactic_result(
+    tac: str,
+    tactic_index: int,
+    before_trusted: int,
+    state: ProofState,
+) -> None:
     """Log the verification outcome of a single tactic application.
 
     When a tactic falls back to a trusted (unverified) step, the log includes
-    the *reason* why the kernel could not verify it and a *suggestion* on how
-    to resolve the gap.
-
-    Note: step names are not logged to avoid flowing proof-internal labels
-    through logging sinks.  Use ``get_proof_summary()`` for the full list.
+    the step number, current goal, reason why the kernel could not verify it
+    and a suggestion on how to resolve the gap.
     """
     if state.admitted:
-        logger.warning("    [SORRY ✗] tactic '%s' — proof admitted (sorry)", tac)
-    elif len(state.trusted_steps) > before_trusted:
-        unverified_count = len(state.trusted_steps) - before_trusted
-        new_reasons = state.trusted_reasons[before_trusted:]
-        reason_detail = "; ".join(r for r in new_reasons if r) or "type cannot be tracked"
-        suggestion = _suggest_for_tactic(tac)
-        # Persist suggestion in state so callers can retrieve it programmatically.
-        for _ in range(unverified_count):
-            state.trusted_suggestions.append(suggestion)
         logger.warning(
-            "    [TRUSTED ⚠] tactic '%s' — bypassed kernel type-checker "
+            "    [SORRY ✗] step %d '%s' — proof admitted (sorry)", tactic_index, tac
+        )
+    elif len(state.trusted_steps) > before_trusted:
+        new_entries: List[Dict[str, Any]] = state.trusted_steps[before_trusted:]
+        suggestion = _suggest_for_tactic(tac)
+        # Enrich each new trusted step with its tactic index and suggestion.
+        for entry in new_entries:
+            entry["index"] = tactic_index
+            if not entry.get("suggestion"):
+                entry["suggestion"] = suggestion
+        unverified_count = len(new_entries)
+        reason_detail = (
+            "; ".join(e["reason"] for e in new_entries if e.get("reason"))
+            or "type cannot be tracked"
+        )
+        goal_detail = new_entries[0].get("goal", "") if new_entries else ""
+        logger.warning(
+            "    [TRUSTED ⚠] step %d '%s' — bypassed kernel type-checker "
             "(%d unverified step(s))\n"
-            "      Reason   : %s\n"
+            "      Goal      : %s\n"
+            "      Reason    : %s\n"
             "      Suggestion: %s",
+            tactic_index,
             tac,
             unverified_count,
+            goal_detail,
             reason_detail,
             suggestion,
         )
     else:
-        logger.debug("    [kernel ✓] tactic '%s' — kernel-verified", tac)
+        logger.debug(
+            "    [kernel ✓] step %d '%s' — kernel-verified", tactic_index, tac
+        )
 
 
 def _suggest_for_tactic(tac: str) -> str:
@@ -99,7 +114,7 @@ def _suggest_for_tactic(tac: str) -> str:
 
 def run_tactics(statement: str, tactics: List[str]) -> ProofState:
     state = ProofState(statement)
-    for tac in tactics:
+    for tactic_index, tac in enumerate(tactics, start=1):
         if state.closed:
             break
         before_trusted = len(state.trusted_steps)
@@ -108,7 +123,7 @@ def run_tactics(statement: str, tactics: List[str]) -> ProofState:
         except TacticError as e:
             logger.error("  [dsl error] %s", e)
             break
-        _log_tactic_result(tac, before_trusted, state)
+        _log_tactic_result(tac, tactic_index, before_trusted, state)
     return state
 
 

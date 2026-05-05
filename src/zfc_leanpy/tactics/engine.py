@@ -151,11 +151,16 @@ def apply_tactic(state: ProofState, tactic: str) -> ProofState:
             if ":" in lhs:
                 n, typ = lhs.split(":", 1)
                 state.hypotheses[n.strip()] = typ.strip()
-                state.trusted_steps.append("have :=")
-                state.trusted_reasons.append(
-                    f"'have {n.strip()} : {typ.strip()} := ...' proof term is not "
-                    "kernel-verified; consider using a 'have : T' sub-goal instead"
-                )
+                state.trusted_steps.append({
+                    "index": -1,  # enriched by runner
+                    "tactic": "have :=",
+                    "reason": (
+                        f"'have {n.strip()} : {typ.strip()} := ...' proof term is not "
+                        "kernel-verified; consider using a 'have : T' sub-goal instead"
+                    ),
+                    "suggestion": "",  # enriched by runner
+                    "goal": state.current_goal() or "",
+                })
                 return state
             raise TacticError("have: invalid syntax")
         if ":" in payload:

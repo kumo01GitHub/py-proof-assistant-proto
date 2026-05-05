@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import importlib.util
 import os
-from typing import Dict, List
+from typing import Any, Dict, List
 
 from .. import dsl
 from ..kernel import ProofState, TacticError
@@ -16,19 +16,36 @@ from ..tactics import apply_tactic
 logger = get_logger(__name__)
 
 
-def print_status_entry(name: str, statement: str, status: str, trusted_steps: List[str]) -> None:
+def print_status_entry(
+    name: str,
+    statement: str,
+    status: str,
+    trusted_steps: List[Dict[str, Any]],
+) -> None:
     logger.info("[theorem] %s : %s", name, statement)
     if status == "proved":
-        logger.info("  [PROVED ✓] proof complete — kernel-verified, certificate issued")
+        logger.info("  [PROVED ✓] proof complete — kernel-verified")
     elif status == "trusted":
         unverified_count = len(trusted_steps)
         logger.warning(
-            "  [TRUSTED ⚠] proof complete but %d UNVERIFIED step(s) — no certificate issued"
-            " (use get_proof_summary() for step details)",
+            "  [TRUSTED ⚠] proof complete but %d UNVERIFIED step(s):",
             unverified_count,
         )
+        for s in trusted_steps:
+            idx = s.get("index", -1)
+            tac = s.get("tactic", "?")
+            goal = s.get("goal", "")
+            reason = s.get("reason", "")
+            suggestion = s.get("suggestion", "")
+            idx_str = f"step {idx}" if idx >= 0 else "step ?"
+            logger.warning(
+                "    [%s] tactic '%s' — goal: %s\n"
+                "      Reason    : %s\n"
+                "      Suggestion: %s",
+                idx_str, tac, goal, reason, suggestion,
+            )
     elif status == "sorry":
-        logger.warning("  [SORRY ✗] proof admitted (sorry) — no certificate issued")
+        logger.warning("  [SORRY ✗] proof admitted (sorry)")
     else:
         logger.warning("  [INCOMPLETE ✗] %s", status)
 
@@ -56,7 +73,12 @@ def interpret_file(filepath: str) -> Dict[str, Dict]:
             if kind == "axiom":
                 logger.info("[axiom] %s : %s", name, entry["statement"])
             elif kind in ("theorem", "lemma"):
-                print_status_entry(name, entry["statement"], entry["status"], list(entry.get("trusted_steps", [])))
+                print_status_entry(
+                    name,
+                    entry["statement"],
+                    entry["status"],
+                    list(entry.get("trusted_steps", [])),
+                )
             elif kind == "def":
                 logger.info("[def] %s", name)
         logger.info("=== Done ===")
@@ -80,7 +102,12 @@ def interpret_file(filepath: str) -> Dict[str, Dict]:
             dec = dsl.theorem if kind == "theorem" else dsl.lemma
             dec(name, stmt, tactics=tacs)(lambda: None)
             entry = dsl.get_registry()[name]
-            print_status_entry(name, stmt, entry["status"], list(entry.get("trusted_steps", [])))
+            print_status_entry(
+                name,
+                stmt,
+                entry["status"],
+                list(entry.get("trusted_steps", [])),
+            )
             continue
 
         if kind == "def":
@@ -113,9 +140,22 @@ def step_file(filepath: str, theorem_name: str | None = None) -> None:
         state.display()
         for i, tac in enumerate(item.get("tactics", []), start=1):
             logger.info("\n[%d] %s", i, tac)
+            before_trusted = len(state.trusted_steps)
             try:
                 state = apply_tactic(state, tac)
             except TacticError as e:
                 logger.error("  [error] %s", e)
                 break
+            # Report any trusted steps added by this tactic immediately.
+            new_trusted = state.trusted_steps[before_trusted:]
+            for ts in new_trusted:
+                ts_goal = ts.get("goal", "")
+                ts_reason = ts.get("reason", "")
+                ts_suggestion = ts.get("suggestion", "")
+                logger.warning(
+                    "  [TRUSTED ⚠] step %d '%s' — goal: %s\n"
+                    "    Reason    : %s\n"
+                    "    Suggestion: %s",
+                    i, ts.get("tactic", tac), ts_goal, ts_reason, ts_suggestion,
+                )
             state.display()

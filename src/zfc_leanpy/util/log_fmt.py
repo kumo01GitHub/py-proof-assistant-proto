@@ -8,7 +8,7 @@ representation of proof statuses, minimising log redundancy.
 from __future__ import annotations
 
 import sys
-from typing import List, Tuple
+from typing import Any, Dict, List, Tuple
 
 
 class ANSI:
@@ -26,7 +26,7 @@ class ANSI:
         return text
 
 
-def format_proof_status_tag(status: str, trusted_steps: List[str]) -> Tuple[str, str]:
+def format_proof_status_tag(status: str, trusted_steps: List[Dict[str, Any]]) -> Tuple[str, str]:
     """Return *(icon, tag)* strings for a proof entry's status line.
 
     To avoid flowing proof-internal step names through logging sinks, the
@@ -36,8 +36,8 @@ def format_proof_status_tag(status: str, trusted_steps: List[str]) -> Tuple[str,
     Args:
         status: One of ``"proved"``, ``"trusted"``, ``"sorry"``, or any other
             incomplete/unknown status string.
-        trusted_steps: List of tactic names accepted without kernel verification
-            (only the *count* is included in the returned tag string).
+        trusted_steps: List of trusted step dicts (only the *count* is included
+            in the returned tag string).
 
     Returns:
         A tuple ``(icon, tag)`` of ANSI-colored strings ready for log output.
@@ -56,7 +56,7 @@ def format_proof_status_tag(status: str, trusted_steps: List[str]) -> Tuple[str,
     if status == "sorry":
         return (
             ANSI.color(ANSI.RED, "✗"),
-            ANSI.color(ANSI.RED, "[sorry — no certificate]"),
+            ANSI.color(ANSI.RED, "[sorry]"),
         )
     return (
         ANSI.color(ANSI.RED, "✗"),
@@ -64,17 +64,20 @@ def format_proof_status_tag(status: str, trusted_steps: List[str]) -> Tuple[str,
     )
 
 
-def format_trusted_step_detail(step: str, reason: str) -> str:
-    """Format a single unverified tactic step with its reason for log output.
+def format_trusted_step_detail(step: Dict[str, Any]) -> str:
+    """Format a single unverified tactic step dict for log output.
 
     Args:
-        step: The tactic name accepted without kernel verification.
-        reason: Human-readable explanation of why the kernel could not verify
-            this step (may be empty).
+        step: A trusted step dict with keys ``index``, ``tactic``, ``reason``,
+            ``suggestion``, and ``goal``.
 
     Returns:
-        A formatted string with ANSI bullet and reason (if provided).
+        A formatted string with ANSI bullet, step number, tactic, and reason.
     """
+    idx = step.get("index", -1)
+    tactic = step.get("tactic", "?")
+    reason = step.get("reason", "")
+    idx_str = f"step {idx}" if idx >= 0 else "step ?"
     reason_text = f" — {reason}" if reason else ""
     marker = ANSI.color(ANSI.YELLOW, "·")
-    return f"{marker} unverified step: '{step}'{reason_text}"
+    return f"{marker} [{idx_str}] unverified tactic '{tactic}'{reason_text}"

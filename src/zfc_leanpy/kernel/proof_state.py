@@ -1,6 +1,6 @@
 """ProofState - mutable proof state with per-goal hypothesis scopes."""
 
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional
 
 from ..logger import get_logger
 from .errors import TacticError
@@ -16,9 +16,8 @@ class ProofState:
         self._hyp_stack: List[Dict[str, str]] = [dict(hypotheses or {})]
         self.admitted: bool = False
         self.closed: bool = False
-        self.trusted_steps: List[str] = []
-        self.trusted_reasons: List[str] = []
-        self.trusted_suggestions: List[str] = []
+        # Each entry: {index: int, tactic: str, reason: str, suggestion: str, goal: str}
+        self.trusted_steps: List[Dict[str, Any]] = []
         self.tactic_trace: List[str] = []
 
     @property
@@ -124,8 +123,6 @@ class ProofState:
         s._hyp_stack = [dict(h) for h in self._hyp_stack]
         s.admitted = self.admitted
         s.closed = self.closed
-        s.trusted_steps = list(self.trusted_steps)
-        s.trusted_reasons = list(self.trusted_reasons)
-        s.trusted_suggestions = list(self.trusted_suggestions)
+        s.trusted_steps = [dict(step) for step in self.trusted_steps]
         s.tactic_trace = list(self.tactic_trace)
         return s

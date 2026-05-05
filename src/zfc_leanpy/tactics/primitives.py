@@ -62,8 +62,13 @@ def parse_proof_term(expr: str) -> Optional[PTerm]:
 
 
 def trusted_close(state: ProofState, tag: str, reason: str = "") -> ProofState:
-    state.trusted_steps.append(tag)
-    state.trusted_reasons.append(reason)
+    state.trusted_steps.append({
+        "index": -1,  # enriched by runner
+        "tactic": tag,
+        "reason": reason,
+        "suggestion": "",  # enriched by runner
+        "goal": state.current_goal() or "",
+    })
     state.pop_goal()
     return state
 

@@ -44,7 +44,6 @@ Lean 4 の構文・タクティク体系を参考にしつつ、Python ユーザ
           │  decorators.py  registry.py │
           │  runner.py  helpers.py      │
           │  tactic_objects.py          │
-          │  certificate.py             │
           └──────┬───────────────┬──────┘
                  │               │
     ┌────────────▼───┐   ┌───────▼────────┐
@@ -429,9 +428,8 @@ FEq で l == r → close_with(PRefl)
    なければ run_function_proof(statement, fn)（証明関数形式）
 2. replay_proof(statement, ...) でリプレイ検証
 3. state_to_status(...) でステータスを決定
-4. status == "proved" のみ issue_certificate() を呼ぶ
-5. register_entry(name, {...}) でレジストリに登録
-6. _log_proof_status() でログ出力
+4. register_entry(name, {...}) でレジストリに登録
+5. _log_proof_status() でログ出力
 ```
 
 #### 3.4.5 `dsl/registry.py` — 証明レジストリ
@@ -446,11 +444,8 @@ FEq で l == r → close_with(PRefl)
   "name":               str,
   "statement":          str,       # fparse で解析可能な命題文字列
   "status":             "proved" | "trusted" | "sorry" | "axiom" | "defined" | "incomplete (...)",
-  "trusted_steps":      List[str], # カーネル未検証のタクティク名
-  "trusted_reasons":    List[str], # 各 trusted_step の理由（parallel）
-  "trusted_suggestions":List[str], # 各 trusted_step の改善提案（parallel）
+  "trusted_steps":      List[Dict],  # 各要素: {index, tactic, reason, suggestion, goal}
   "tactics":            List[str], # 適用されたタクティク文字列
-  "certificate":        Optional[Dict],  # ProofCertificate.to_dict() or None
   "replay_ok":          bool,
 }
 ```
@@ -466,22 +461,21 @@ else                    → "incomplete (N goal(s) remaining)"
 
 **`revalidate_proof(name, new_tactics)`**:
 - `trusted` / `sorry` のエントリに改良版タクティクを再実行
-- `proved` になれば証明書を発行してレジストリを更新
+- `proved` になればレジストリを更新
 - `proved` / `axiom` / `defined` には何もしない
 
 **`get_proof_summary(name) -> Optional[Dict]`** の返却スキーマ:
 
 ```python
 {
-  "name":                str,
-  "kind":                str,
-  "status":              str,
-  "can_issue_certificate": bool,   # status == "proved" のとき True
-  "trusted_steps":       List[str],
-  "trusted_reasons":     List[str],
-  "trusted_suggestions": List[str],
-  "replay_ok":           bool,
-  "error_message":       Optional[str],
+  "name":                      str,
+  "kind":                      str,
+  "status":                    str,
+  "trusted_steps":             List[Dict],  # 各要素: {index, tactic, reason, suggestion, goal}
+  "first_trusted_step_index":  Optional[int],  # 最初の trusted step の1始まりインデックス
+  "first_trusted_goal":        Optional[str],  # 最初の trusted step 発生時のゴール文字列
+  "replay_ok":                 bool,
+  "error_message":             Optional[str],
 }
 ```
 
@@ -502,33 +496,7 @@ else                    → "incomplete (N goal(s) remaining)"
 - 引数ありの関数を `proof_fn(state)` として呼ぶ（関数スタイル証明向け）
 - `tactic_trace` を `replay_source` として使う
 
-#### 3.4.7 `dsl/certificate.py` — ProofCertificate
-
-`status == "proved"` の証明に発行される HMAC-SHA256 署名証明書。
-
-**スキーマ**:
-```python
-@dataclass(frozen=True)
-class ProofCertificate:
-    statement: str
-    tactics:   List[str]
-    replay_ok: bool
-    signature: str      # HMAC-SHA256 の hex digest
-```
-
-**署名対象**:
-```json
-{"replay_ok": true, "statement": "...", "tactics": ["..."]}
-```
-（JSON の `sort_keys=True` で決定論的に） → HMAC-SHA256 → hex
-
-**シークレット**: 環境変数 `ZFC_LEANPY_CERT_SECRET`（未設定時は `"zfc-leanpy-dev-secret"`）
-
-**`issue_certificate(statement, tactics, replay_ok) -> Optional[ProofCertificate]`**:
-- `replay_ok == False` なら `None`を返す
-- 署名を生成し `verify()` で自己検証
-
-#### 3.4.8 `dsl/helpers.py` — ProofState 関数ヘルパ
+#### 3.4.7 `dsl/helpers.py` — ProofState 関数ヘルパ
 
 関数スタイル証明（`proof_fn(state)` 形式）で使えるヘルパ関数群。
 内部では `apply_tactic(state, "tactic_string")` を呼ぶラッパー。
@@ -685,10 +653,7 @@ _TheoremMeta.__new__()
        state_to_status() → "proved"
               │
               ▼
-       issue_certificate() → ProofCertificate(signature=...)
-              │
-              ▼
-       register_entry("AndComm", {status: "proved", certificate: {...}, ...})
+       register_entry("AndComm", {status: "proved", ...})
 ```
 
 ### 4.2 tactic 失敗フロー（旧 trusted fallback フロー）
@@ -761,7 +726,7 @@ do_apply(state, "h")
 
 | 箇所 | 理由 | 影響 |
 |---|---|---|
-| `have h := expr` | 証明項を検証しない即時仮説導入（明示的 trusted） | `trusted` ステータス（証明書なし） |
+| `have h := expr` | 証明項を検証しない即時仮説導入（明示的 trusted） | `trusted` ステータス |
 | `fparse` の曖昧性 | 優先度解析が完全でない場合がある | 解析失敗時は `None` を返す |
 | `FEq` の項文字列 | 項を AST 化していないため項の等値性は文字列比較 | `ring` / `omega` に依存 |
 | `simp` の指数爆発 | 2^n 真理値表 | 変数が多い命題は遅い |
@@ -779,10 +744,10 @@ do_apply(state, "h")
 
 ### 7.2 証明項の永続化
 
-**現状**: `ProofCertificate` は HMAC 署名のみ（証明木は含まない）  
+**現状**: 証明項（`PTerm`）は `close_with()` 時のみ評価される  
 **課題**: 外部ツール（Lean / Coq）への移植時に証明項が失われる  
-**差し替え**: 証明木全体を JSON でシリアライズして `certificate` に含める  
-**影響範囲**: `formula/proof_terms.py`, `dsl/certificate.py`, `kernel/proof_state.py`
+**差し替え**: 証明木全体を JSON でシリアライズして registry entry に含める  
+**影響範囲**: `formula/proof_terms.py`, `kernel/proof_state.py`
 
 ### 7.3 量化子の完全対応
 
@@ -805,13 +770,6 @@ do_apply(state, "h")
 **差し替え**: de Bruijn インデックスへの内部表現の移行、または名前解決レイヤーの追加  
 **影響範囲**: `formula/ast.py`, `formula/parser.py`, `tactics/primitives.py`
 
-### 7.6 証明書のシークレット管理
-
-**現状**: `ZFC_LEANPY_CERT_SECRET` 環境変数（未設定時は固定文字列）  
-**課題**: 本番環境でのシークレットローテーションができない  
-**差し替え**: KMS / Vault 連携、または非対称署名（Ed25519）への移行  
-**影響範囲**: `dsl/certificate.py` のみ
-
 ---
 
 ## 8. テスト戦略
@@ -821,7 +779,7 @@ do_apply(state, "h")
 | `test_kernel.py` | `ProofState` の状態遷移・ゴール操作 |
 | `test_formula.py` | AST・`fparse`・`type_check`・証明項 |
 | `test_tactics.py` | 各タクティクの sound / trusted 挙動 |
-| `test_dsl.py` | デコレータ・ステータス・証明書発行 |
+| `test_dsl.py` | デコレータ・ステータス |
 | `test_class_api.py` | `Theorem` / `Lemma` / `Axiom` クラス API |
 | `test_decision_procedures.py` | `ring` / `simp` / `omega` / `norm_num` の正否 |
 | `test_lean_parser.py` | `.lean` ファイル解析 |
@@ -830,7 +788,7 @@ do_apply(state, "h")
 | `test_axioms.py` | ZFC 公理の登録・取得 |
 | `test_proof_engine.py` | デモ定理の健全性 |
 | `test_examples_runtime.py` | `example/` ディレクトリの Lean ファイル実行 |
-| `test_proof_status.py` | ステータス遷移・証明書検証 |
+| `test_proof_status.py` | ステータス遷移・trusted 可視化 |
 | `test_revalidation.py` | `revalidate_proof` による `trusted → proved` 昇格 |
 | `test_trusted_improvements.py` | trusted タクティクの改善動作（kernel-verified ケース） |
 

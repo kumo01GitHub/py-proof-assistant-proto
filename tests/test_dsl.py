@@ -11,7 +11,6 @@ from zfc_leanpy.dsl import (
     list_theorems,
     theorem,
 )
-from zfc_leanpy.dsl.certificate import ProofCertificate
 
 
 def test_axiom_registration():
@@ -31,16 +30,8 @@ def test_theorem_registration_with_tactics():
     reg = get_registry()["idp"]
     assert reg["kind"] == "theorem"
     assert reg["status"] == "proved"
-    assert reg["certificate"] is not None
     assert reg["replay_ok"] is True
-    cert = reg["certificate"]
-    cert_obj = ProofCertificate(
-        statement=cert["statement"],
-        tactics=list(cert["tactics"]),
-        replay_ok=bool(cert["replay_ok"]),
-        signature=cert["signature"],
-    )
-    assert cert_obj.verify() is True
+    assert reg["trusted_steps"] == []
 
 
 def test_registry_snapshot_is_not_directly_mutable():
@@ -72,7 +63,6 @@ def test_noarg_function_style_is_treated_as_sorry():
 
     reg = get_registry()["noarg"]
     assert reg["status"] == "sorry"
-    assert reg["certificate"] is None
 
 
 def test_trusted_status_is_separate_from_proved():
@@ -83,7 +73,7 @@ def test_trusted_status_is_separate_from_proved():
 
     reg = get_registry()["trusted_apply"]
     assert reg["status"] == "trusted"
-    assert reg["certificate"] is None
+    assert len(reg["trusted_steps"]) > 0
 
 
 def test_def_registration():
