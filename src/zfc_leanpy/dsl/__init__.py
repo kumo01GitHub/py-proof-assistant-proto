@@ -7,6 +7,7 @@ from .registry import (
     get_proof_summary,
     list_axioms,
     list_theorems,
+    revalidate_proof,
 )
 from .decorators import axiom, def_, lemma, theorem
 from .helpers import (
@@ -44,6 +45,7 @@ __all__ = [
     "list_theorems",
     "get_status",
     "get_proof_summary",
+    "revalidate_proof",
     # デコレータ API
     "axiom",
     "theorem",
