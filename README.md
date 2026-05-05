@@ -120,7 +120,7 @@ class _Impl(Lemma):
 #### レジストリと証明書
 
 ```python
-from zfc_leanpy.dsl import get_status, get_registry
+from zfc_leanpy.dsl import get_status, get_registry, get_proof_summary, revalidate_proof
 
 get_status("AndComm")   # "proved" | "trusted" | "sorry"
 get_registry()          # 全登録エントリの immutable view（MappingProxyType）
@@ -133,6 +133,8 @@ get_registry()          # 全登録エントリの immutable view（MappingProxy
 | `proved` | 全ステップが `type_check()` を通過し、リプレイが成功した |
 | `trusted` | 一部ステップが `type_check()` を通らず無検査で受け入れられた |
 | `sorry` | `sorry_()` タクティクを含む |
+
+`revalidate_proof(name, new_tactics)` を使うと、`trusted` / `sorry` 状態の証明に改良版のタクティクを再適用し、カーネル検証が通れば `proved` へ昇格できます。
 
 ### デコレータ API（後方互換）
 
@@ -220,7 +222,7 @@ class LinearFact(Theorem):
 
 ### trusted タクティク（型を追いきれないため一部無検査）
 
-`apply_()` / `cases()` / `rcases()` / `have()` / `rw()`
+`apply_()` / `cases()` / `rcases()` / `have()` / `rw()` / `contradiction()`
 
 これらのタクティクは、仮説の型追跡が困難なケースに限り `trusted_close()` で受け入れます。
 `ProofState.trusted_steps` と `trusted_reasons` に記録され、`get_proof_summary()` で確認できます。
@@ -229,7 +231,17 @@ class LinearFact(Theorem):
 from zfc_leanpy.dsl import get_proof_summary
 
 summary = get_proof_summary("MyTheorem")
-# {'status': 'trusted', 'trusted_steps': ['apply_'], 'trusted_reasons': ['unknown hyp type']}
+# {
+#   'name': 'MyTheorem',
+#   'kind': 'theorem',
+#   'status': 'trusted',
+#   'can_issue_certificate': False,
+#   'trusted_steps': ['apply_'],
+#   'trusted_reasons': ['unknown hyp type'],
+#   'trusted_suggestions': ['ensure the hypothesis has type A → B ...'],
+#   'replay_ok': False,
+#   'error_message': "[TRUSTED] 'MyTheorem' has unverified tactic steps: apply_. ..."
+# }
 ```
 
 `apply_()` は以下の3ケースではカーネル検証済みとなり `trusted` マークが付きません：
@@ -407,6 +419,7 @@ zfc_leanpy/
 │   ├── logic.lean              ← 命題論理サンプル
 │   └── empty_set.lean          ← 集合論サンプル（ZFC 公理使用）
 ├── src/zfc_leanpy/
+│   ├── logger.py               ← 共通ロギング設定（NullHandler）
 │   ├── kernel/                 ← 証明カーネル
 │   │   ├── proof_state.py      ←   ProofState クラス
 │   │   └── errors.py           ←   TacticError クラス
@@ -426,7 +439,7 @@ zfc_leanpy/
 │   │   ├── tactic_objects.py   ←   タクティクオブジェクト群
 │   │   ├── class_api.py        ←   Theorem / Lemma / Axiom メタクラス
 │   │   ├── decorators.py       ←   @theorem / @lemma / @axiom
-│   │   ├── registry.py         ←   証明レジストリ管理
+│   │   ├── registry.py         ←   証明レジストリ管理・revalidate_proof
 │   │   ├── runner.py           ←   run_tactics / replay_proof
 │   │   ├── helpers.py          ←   ProofState 関数ヘルパ
 │   │   └── certificate.py      ←   ProofCertificate（HMAC-SHA256）
@@ -454,7 +467,10 @@ zfc_leanpy/
     ├── test_cli.py             ← CLI 実行
     ├── test_axioms.py          ← ZFC 公理登録
     ├── test_proof_engine.py    ← デモ定理
-    └── test_examples_runtime.py  ← Lean サンプルファイル実行
+    ├── test_examples_runtime.py  ← Lean サンプルファイル実行
+    ├── test_proof_status.py    ← ステータス遷移・証明書検証
+    ├── test_revalidation.py    ← revalidate_proof による昇格
+    └── test_trusted_improvements.py  ← trusted タクティクの改善動作
 ```
 
 ---
