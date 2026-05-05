@@ -199,7 +199,7 @@ def do_cases(state: ProofState, arg: str) -> ProofState:
         current_goal = state.current_goal()
         if current_goal is None:
             raise TacticError(
-                f"cases: no current goal to perform case split on"
+                f"cases {hyp_name}: no current goal to perform case split on"
             )
         h_left = f"{hyp_name}_left"
         h_right = f"{hyp_name}_right"

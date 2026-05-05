@@ -262,4 +262,4 @@ class TestIntegrationProved:
         # 変数のみのゴールは証明不可 → TacticError で停止し incomplete になる
         status = get_status("n_gt_zero")
         assert status is not None
-        assert "incomplete" in status
+        assert status.startswith("incomplete")

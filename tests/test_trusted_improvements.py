@@ -12,7 +12,7 @@ import logging
 
 import pytest
 
-from zfc_leanpy.kernel import ProofState
+from zfc_leanpy.kernel import ProofState, TacticError
 from zfc_leanpy.tactics import apply_tactic
 from zfc_leanpy.dsl import theorem, get_proof_summary
 
@@ -105,13 +105,11 @@ class TestRwEquality:
 
     def test_rw_missing_rule_raises_tactic_error(self):
         """rw with unknown rule raises TacticError (no longer a trusted fallback)."""
-        from zfc_leanpy.kernel import TacticError
         with pytest.raises(TacticError, match="not found"):
             apply_tactic(ProofState("x = y"), "rw [unknown_rule]")
 
     def test_rw_non_equality_rule_raises_tactic_error(self):
         """rw with non-equality hypothesis raises TacticError (no longer a trusted fallback)."""
-        from zfc_leanpy.kernel import TacticError
         with pytest.raises(TacticError, match="equality"):
             apply_tactic(ProofState("x = y", {"h": "P"}), "rw [h]")
 
@@ -136,25 +134,21 @@ class TestRwEquality:
 class TestTacticErrors:
     def test_apply_unknown_hyp_raises_tactic_error(self):
         """apply with unknown hypothesis raises TacticError."""
-        from zfc_leanpy.kernel import TacticError
         with pytest.raises(TacticError, match="not found"):
             apply_tactic(ProofState("P"), "apply unknown_lemma")
 
     def test_apply_type_mismatch_raises_tactic_error(self):
         """apply when the conclusion doesn't match the goal raises TacticError."""
-        from zfc_leanpy.kernel import TacticError
         with pytest.raises(TacticError, match="conclusion does not match"):
             apply_tactic(ProofState("Q", {"h": "P → P"}), "apply h")
 
     def test_cases_unknown_hyp_raises_tactic_error(self):
         """cases on an unknown hypothesis raises TacticError."""
-        from zfc_leanpy.kernel import TacticError
         with pytest.raises(TacticError, match="not found"):
             apply_tactic(ProofState("P"), "cases nonexistent")
 
     def test_cases_non_conjunction_raises_tactic_error(self):
         """cases on a non-∧/∨ hypothesis raises TacticError."""
-        from zfc_leanpy.kernel import TacticError
         with pytest.raises(TacticError, match="requires ∧ or ∨"):
             apply_tactic(ProofState("P", {"h": "P → Q"}), "cases h")
 
@@ -252,7 +246,6 @@ class TestApplyTrustedReduction:
 
     def test_apply_mismatch_raises_tactic_error(self):
         """apply h where conclusion does not match goal raises TacticError."""
-        from zfc_leanpy.kernel import TacticError
         with pytest.raises(TacticError):
             apply_tactic(ProofState("Q", {"h": "P → P"}), "apply h")
 
@@ -278,13 +271,11 @@ class TestApplyTrustedReduction:
 class TestTypeGuards:
     def test_apply_tactic_rejects_non_proof_state(self):
         """apply_tactic raises TacticError when state is not ProofState."""
-        from zfc_leanpy.kernel import TacticError
         with pytest.raises(TacticError, match="type guard failed"):
             apply_tactic("not a state", "intro h")  # type: ignore[arg-type]
 
     def test_apply_tactic_rejects_non_string_tactic(self):
         """apply_tactic raises TacticError when tactic is not a string."""
-        from zfc_leanpy.kernel import TacticError
         with pytest.raises(TacticError, match="type guard failed"):
             apply_tactic(ProofState("P"), 42)  # type: ignore[arg-type]
 
@@ -301,7 +292,6 @@ class TestTypeGuards:
 
     def test_require_proof_state_includes_context_in_error(self):
         """require_proof_state error message includes the context label."""
-        from zfc_leanpy.kernel import TacticError
         from zfc_leanpy.util.guards import require_proof_state
         with pytest.raises(TacticError, match=r"my_context"):
             require_proof_state(None, context="my_context")

@@ -47,8 +47,8 @@ class TestTrustedSuggestions:
         with caplog.at_level(logging.WARNING, logger="zfc_leanpy"):
             @theorem(
                 "sugg_trusted",
-                "P → Q",
-                tactics=["intro h", "have h2 : Q := h", "exact h2"],
+                "P → P",
+                tactics=["intro h", "have h2 : P := h", "exact h2"],
             )
             def _():
                 pass

@@ -135,6 +135,9 @@ get_registry()          # 全登録エントリの immutable view（MappingProxy
 | `sorry` | `sorry_()` タクティクを含む |
 | `incomplete` | タクティクが `TacticError` で停止し、ゴールが残っている |
 
+`incomplete` 状態のときは、タクティクのエラーメッセージを確認して修正してください。
+証明をとりあえずスキップしたい場合は、`sorry` を明示的に使用することで `sorry` ステータスにできます。
+
 `revalidate_proof(name, new_tactics)` を使うと、`trusted` / `sorry` 状態の証明に改良版のタクティクを再適用し、カーネル検証が通れば `proved` へ昇格できます。
 
 ### デコレータ API（後方互換）
