@@ -28,6 +28,9 @@ def _log_tactic_result(tac: str, before_trusted: int, state: ProofState) -> None
         new_reasons = state.trusted_reasons[before_trusted:]
         reason_detail = "; ".join(r for r in new_reasons if r) or "type cannot be tracked"
         suggestion = _suggest_for_tactic(tac)
+        # Persist suggestion in state so callers can retrieve it programmatically.
+        for _ in range(unverified_count):
+            state.trusted_suggestions.append(suggestion)
         logger.warning(
             "    [TRUSTED ⚠] tactic '%s' — bypassed kernel type-checker "
             "(%d unverified step(s))\n"
