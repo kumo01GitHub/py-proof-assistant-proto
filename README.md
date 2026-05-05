@@ -25,7 +25,7 @@ Lean 4 / Coq / Agda といった既存の定理証明支援系は、強力な型
 
 - **Pythonクラス定義だけで定理・補題・公理を記述** — Lean風DSLを`@theorem`デコレータやクラスAPIで提供
 - **`trusted` / `proved` / `sorry` の三段階ステータス** — 証明の完全性を段階的に追跡・可視化
-- **決定手続きタクティク**（`ring` / `omega` / `simp`）を内蔵し、`proved` 証明書を発行
+- **決定手続きタクティク**（`ring` / `omega` / `simp`）を内蔵し、`proved` ステータスを判定
 - **動的型のリスクをランタイムガードで補完** — `util.guards` による事前型チェックで型安全性を確保
 - **stdlib のみ** — 依存ライブラリゼロで `pip install` 後すぐ動作
 
@@ -94,7 +94,7 @@ from zfc_leanpy.dsl.tactic_objects import intro, constructor, exact, left, ring,
 
 P, Q = Prop("P"), Prop("Q")
 
-# 定理（カーネル検査・証明書発行あり）
+# 定理（カーネル検査）
 class AndComm(Theorem):
     prop    = (P & Q) >> (Q & P)
     tactics = [intro("h"), constructor(), exact("h.2"), exact("h.1")]
@@ -117,7 +117,7 @@ class _Impl(Lemma):
 
 クラス名（または `name` 属性）がレジストリのキーになります。
 
-#### レジストリと証明書
+#### レジストリ
 
 ```python
 from zfc_leanpy.dsl import get_status, get_registry, get_proof_summary, revalidate_proof
@@ -125,8 +125,6 @@ from zfc_leanpy.dsl import get_status, get_registry, get_proof_summary, revalida
 get_status("AndComm")   # "proved" | "trusted" | "sorry"
 get_registry()          # 全登録エントリの immutable view（MappingProxyType）
 ```
-
-`status = "proved"` のときのみ HMAC-SHA256 署名付き `ProofCertificate` が発行されます。
 
 | ステータス | 条件 |
 |---|---|
@@ -242,12 +240,13 @@ summary = get_proof_summary("MyTheorem")
 #   'name': 'MyTheorem',
 #   'kind': 'theorem',
 #   'status': 'trusted',
-#   'can_issue_certificate': False,
-#   'trusted_steps': ['have :='],
-#   'trusted_reasons': ['proof term is not kernel-verified ...'],
-#   'trusted_suggestions': ['replace with a have : T sub-goal ...'],
+#   'trusted_steps': [
+#       {'index': 2, 'tactic': 'have :=', 'reason': '...', 'suggestion': '...', 'goal': 'Q'}
+#   ],
+#   'first_trusted_step_index': 2,
+#   'first_trusted_goal': 'Q',
 #   'replay_ok': False,
-#   'error_message': "[TRUSTED] 'MyTheorem' has unverified tactic steps: have :=. ..."
+#   'error_message': "[TRUSTED] 'MyTheorem' has unverified tactic steps: step 2: have :=. ..."
 # }
 ```
 
@@ -261,7 +260,7 @@ summary = get_proof_summary("MyTheorem")
 
 ### admitted
 
-`sorry_()` — 証明の穴。`status = "sorry"` となり証明書は発行されない。
+`sorry_()` — 証明の穴。`status = "sorry"` となる。
 
 ---
 
@@ -337,18 +336,18 @@ from zfc_leanpy.util import format_proof_status_tag, format_trusted_step_detail
 icon, tag = format_proof_status_tag("proved", [])
 # icon = "✓"（緑）, tag = "[fully sound]"（緑）
 
-icon, tag = format_proof_status_tag("trusted", ["apply_"])
+icon, tag = format_proof_status_tag("trusted", [{"index": 1, "tactic": "apply_", ...}])
 # icon = "⚠"（黄）, tag = "[trusted ⚠: 1 unverified step(s)]"（黄）
 
-detail = format_trusted_step_detail("apply_", "unknown hyp type")
-# "· unverified step: 'apply_' — unknown hyp type"
+detail = format_trusted_step_detail({"index": 1, "tactic": "apply_", "reason": "unknown hyp type", ...})
+# "· [step 1] unverified tactic 'apply_' — unknown hyp type"
 ```
 
 | ステータス | アイコン | タグ |
 |---|---|---|
 | `proved` | ✓（緑） | `[fully sound]` |
 | `trusted` | ⚠（黄） | `[trusted ⚠: N unverified step(s)]` |
-| `sorry` | ✗（赤） | `[sorry — no certificate]` |
+| `sorry` | ✗（赤） | `[sorry]` |
 
 ---
 
@@ -448,8 +447,7 @@ zfc_leanpy/
 │   │   ├── decorators.py       ←   @theorem / @lemma / @axiom
 │   │   ├── registry.py         ←   証明レジストリ管理・revalidate_proof
 │   │   ├── runner.py           ←   run_tactics / replay_proof
-│   │   ├── helpers.py          ←   ProofState 関数ヘルパ
-│   │   └── certificate.py      ←   ProofCertificate（HMAC-SHA256）
+│   │   └── helpers.py          ←   ProofState 関数ヘルパ
 │   ├── parser/                 ← パーサ
 │   │   ├── lean_parser.py      ←   Lean 4 ファイルパーサ
 │   │   ├── lean_to_py.py       ←   Lean → Python 変換
@@ -466,7 +464,7 @@ zfc_leanpy/
     ├── test_kernel.py          ← ProofState / ゴール操作
     ├── test_formula.py         ← AST / type_check / 証明項
     ├── test_tactics.py         ← 各タクティクの挙動
-    ├── test_dsl.py             ← デコレータ / ステータス / 証明書
+    ├── test_dsl.py             ← デコレータ / ステータス
     ├── test_class_api.py       ← Prop / Theorem / Lemma / Axiom
     ├── test_decision_procedures.py  ← ring / simp / omega / norm_num
     ├── test_lean_parser.py     ← Lean 4 パーサ
@@ -475,7 +473,7 @@ zfc_leanpy/
     ├── test_axioms.py          ← ZFC 公理登録
     ├── test_proof_engine.py    ← デモ定理
     ├── test_examples_runtime.py  ← Lean サンプルファイル実行
-    ├── test_proof_status.py    ← ステータス遷移・証明書検証
+    ├── test_proof_status.py    ← ステータス遷移・trusted 可視化
     ├── test_revalidation.py    ← revalidate_proof による昇格
     └── test_trusted_improvements.py  ← trusted タクティクの改善動作
 ```
@@ -508,7 +506,6 @@ zfc_leanpy/
 ### 分散証明処理
 
 - 大規模な定理群を並列処理するため、証明タスクを分散ワーカーへ送信する機構の導入。
-- `ProofCertificate`（HMAC-SHA256）を活用した分散環境での証明書検証。
 
 ### AI 連携（証明生成支援）
 
@@ -518,7 +515,7 @@ zfc_leanpy/
 ### 証明ツリーの可視化
 
 - 証明過程を有向グラフ（証明ツリー）として出力し、`trusted` 箇所をハイライト表示する。
-- JSON / DOT 形式での証明書エクスポートにより、他ツール（Lean / Coq）へのインポートを可能にする。
+- JSON / DOT 形式でのエクスポートにより、他ツール（Lean / Coq）へのインポートを可能にする。
 
 ### 静的型チェックの強化
 

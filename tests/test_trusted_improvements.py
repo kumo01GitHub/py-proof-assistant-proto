@@ -242,7 +242,6 @@ class TestApplyTrustedReduction:
         summary = get_proof_summary("modus_tollens")
         assert summary["status"] == "proved"
         assert summary["trusted_steps"] == []
-        assert summary["can_issue_certificate"] is True
 
     def test_apply_mismatch_raises_tactic_error(self):
         """apply h where conclusion does not match goal raises TacticError."""

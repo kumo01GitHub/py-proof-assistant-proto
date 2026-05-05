@@ -1,9 +1,8 @@
 """Decorator implementations for axiom/theorem/lemma/def_."""
 
-from typing import Callable, List, Optional
+from typing import Any, Callable, Dict, List, Optional
 
 from ..logger import get_logger
-from .certificate import issue_certificate
 from .registry import register_entry, state_to_status
 from .runner import replay_proof, run_function_proof, run_tactics
 
@@ -24,25 +23,25 @@ def axiom(name: str, statement: str) -> Callable[[Callable], Callable]:
     return decorator
 
 
-def _log_proof_status(kind: str, name: str, status: str, trusted_steps: List[str]) -> None:
+def _log_proof_status(kind: str, name: str, status: str, trusted_steps: List[Dict[str, Any]]) -> None:
     """Log the proof registration outcome with explicit status markers."""
     if status == "proved":
-        logger.info("[%s] %s — [PROVED ✓] kernel-verified, certificate issued", kind, name)
+        logger.info("[%s] %s — [PROVED ✓] kernel-verified", kind, name)
     elif status == "sorry":
         logger.warning(
-            "[%s] %s — [SORRY ✗] proof admitted with sorry; no certificate issued",
+            "[%s] %s — [SORRY ✗] proof admitted with sorry",
             kind, name,
         )
     elif status == "trusted":
         unverified_count = len(trusted_steps)
         logger.warning(
-            "[%s] %s — [TRUSTED ⚠] %d unverified step(s); no certificate issued"
+            "[%s] %s — [TRUSTED ⚠] %d unverified step(s)"
             " (use get_proof_summary() for step details)",
             kind, name, unverified_count,
         )
     else:
         logger.warning(
-            "[%s] %s — [INCOMPLETE ✗] %s; no certificate issued",
+            "[%s] %s — [INCOMPLETE ✗] %s",
             kind, name, status,
         )
 
@@ -70,24 +69,13 @@ def _register_with_proof(
         replay_ok,
     )
 
-    # Certificates are only issued when all steps are kernel-verified (status == "proved").
-    # Call issue_certificate only when the status warrants it to avoid unnecessary work.
-    if status == "proved":
-        cert_obj = issue_certificate(statement, replay_source, replay_ok)
-        certificate = cert_obj.to_dict() if cert_obj is not None else None
-    else:
-        certificate = None
-
     register_entry(name, {
         "kind": kind,
         "name": name,
         "statement": statement,
         "status": status,
-        "trusted_steps": list(state.trusted_steps),
-        "trusted_reasons": list(state.trusted_reasons),
-        "trusted_suggestions": list(state.trusted_suggestions),
+        "trusted_steps": [dict(s) for s in state.trusted_steps],
         "tactics": replay_source,
-        "certificate": certificate,
         "replay_ok": replay_ok,
     })
 
