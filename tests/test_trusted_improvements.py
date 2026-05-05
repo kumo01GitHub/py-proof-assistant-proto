@@ -1,11 +1,11 @@
-"""Tests for trusted-tactic improvements.
+"""Tests for tactic verification behavior.
 
 Covers:
 - Structural cases on ∧ (no trusted mark)
 - Structural cases on ∨ (two goals, no trusted mark)
 - Structural rw with equality hypothesis (no trusted mark, closes via rfl)
-- Fallback reasons recorded in trusted_steps / trusted_reasons
-- Reason and Suggestion appear in WARNING log output
+- Failed tactics raise TacticError (no implicit trusted fallback)
+- Reason and Suggestion appear in WARNING log output for explicit trusted steps
 """
 
 import logging
@@ -103,20 +103,17 @@ class TestRwEquality:
         assert s.current_goal() == "b = c"
         assert not s.trusted_steps
 
-    def test_rw_missing_rule_falls_back_to_trusted_with_reason(self):
-        """rw with unknown rule produces a trusted step with a reason."""
-        s = ProofState("x = y")
-        s = apply_tactic(s, "rw [unknown_rule]")
-        assert len(s.trusted_steps) > 0
-        assert any("not found" in r for r in s.trusted_reasons)
+    def test_rw_missing_rule_raises_tactic_error(self):
+        """rw with unknown rule raises TacticError (no longer a trusted fallback)."""
+        from zfc_leanpy.kernel import TacticError
+        with pytest.raises(TacticError, match="not found"):
+            apply_tactic(ProofState("x = y"), "rw [unknown_rule]")
 
-    def test_rw_non_equality_rule_falls_back_with_reason(self):
-        """rw with non-equality hypothesis records a reason."""
-        s = ProofState("x = y", {"h": "P"})
-        s = apply_tactic(s, "rw [h]")
-        assert len(s.trusted_steps) > 0
-        reason = s.trusted_reasons[0]
-        assert "equality" in reason or "rw" in reason
+    def test_rw_non_equality_rule_raises_tactic_error(self):
+        """rw with non-equality hypothesis raises TacticError (no longer a trusted fallback)."""
+        from zfc_leanpy.kernel import TacticError
+        with pytest.raises(TacticError, match="equality"):
+            apply_tactic(ProofState("x = y", {"h": "P"}), "rw [h]")
 
     def test_rw_kernel_verified_proof(self):
         """An equality proof using rw + rfl is fully kernel-verified."""
@@ -133,42 +130,33 @@ class TestRwEquality:
 
 
 # ──────────────────────────────────────────────────────────────────
-# Trusted fallback reasons recorded in ProofState
+# Tactic errors — failed tactics raise TacticError (no trusted fallback)
 # ──────────────────────────────────────────────────────────────────
 
-class TestTrustedReasons:
-    def test_apply_unknown_hyp_has_reason(self):
-        """apply with unknown hypothesis records a descriptive reason."""
-        s = ProofState("P")
-        s = apply_tactic(s, "apply unknown_lemma")
-        assert len(s.trusted_steps) == 1
-        assert len(s.trusted_reasons) == 1
-        reason = s.trusted_reasons[0]
-        assert "not found" in reason or "unknown_lemma" in reason
+class TestTacticErrors:
+    def test_apply_unknown_hyp_raises_tactic_error(self):
+        """apply with unknown hypothesis raises TacticError."""
+        from zfc_leanpy.kernel import TacticError
+        with pytest.raises(TacticError, match="not found"):
+            apply_tactic(ProofState("P"), "apply unknown_lemma")
 
-    def test_apply_type_mismatch_has_reason(self):
-        """apply when the conclusion doesn't match the goal records a reason."""
-        s = ProofState("Q", {"h": "P → P"})
-        s = apply_tactic(s, "apply h")
-        assert len(s.trusted_steps) == 1
-        reason = s.trusted_reasons[0]
-        assert reason  # non-empty reason
+    def test_apply_type_mismatch_raises_tactic_error(self):
+        """apply when the conclusion doesn't match the goal raises TacticError."""
+        from zfc_leanpy.kernel import TacticError
+        with pytest.raises(TacticError, match="conclusion does not match"):
+            apply_tactic(ProofState("Q", {"h": "P → P"}), "apply h")
 
-    def test_cases_unknown_hyp_has_reason(self):
-        """cases on an unknown hypothesis records a descriptive reason."""
-        s = ProofState("P")
-        s = apply_tactic(s, "cases nonexistent")
-        assert len(s.trusted_steps) == 1
-        reason = s.trusted_reasons[0]
-        assert "not found" in reason or "nonexistent" in reason
+    def test_cases_unknown_hyp_raises_tactic_error(self):
+        """cases on an unknown hypothesis raises TacticError."""
+        from zfc_leanpy.kernel import TacticError
+        with pytest.raises(TacticError, match="not found"):
+            apply_tactic(ProofState("P"), "cases nonexistent")
 
-    def test_cases_non_conjunction_has_reason(self):
-        """cases on a non-∧/∨ hypothesis records an explanatory reason."""
-        s = ProofState("P", {"h": "P → Q"})
-        s = apply_tactic(s, "cases h")
-        assert len(s.trusted_steps) == 1
-        reason = s.trusted_reasons[0]
-        assert reason  # non-empty
+    def test_cases_non_conjunction_raises_tactic_error(self):
+        """cases on a non-∧/∨ hypothesis raises TacticError."""
+        from zfc_leanpy.kernel import TacticError
+        with pytest.raises(TacticError, match="requires ∧ or ∨"):
+            apply_tactic(ProofState("P", {"h": "P → Q"}), "cases h")
 
 
 # ──────────────────────────────────────────────────────────────────
@@ -178,12 +166,12 @@ class TestTrustedReasons:
 class TestReasonInLog:
     def test_log_includes_reason(self, caplog):
         """The [TRUSTED ⚠] log line includes the reason for the fallback."""
-        # `apply h` where h : P and goal : Q — conclusion mismatch → trusted fallback.
+        # `have h2 : Q := h` is an inline proof term — explicit trusted step with reason.
         with caplog.at_level(logging.WARNING, logger="zfc_leanpy"):
             @theorem(
                 "log_reason_test",
                 "P → Q",
-                tactics=["intro h", "apply h"],
+                tactics=["intro h", "have h2 : Q := h", "exact h2"],
             )
             def _():
                 pass
@@ -262,11 +250,11 @@ class TestApplyTrustedReduction:
         assert summary["trusted_steps"] == []
         assert summary["can_issue_certificate"] is True
 
-    def test_apply_mismatch_still_trusted(self):
-        """apply h where conclusion does not match goal is still trusted."""
-        s = ProofState("Q", {"h": "P → P"})
-        s = apply_tactic(s, "apply h")
-        assert len(s.trusted_steps) == 1
+    def test_apply_mismatch_raises_tactic_error(self):
+        """apply h where conclusion does not match goal raises TacticError."""
+        from zfc_leanpy.kernel import TacticError
+        with pytest.raises(TacticError):
+            apply_tactic(ProofState("Q", {"h": "P → P"}), "apply h")
 
     def test_apply_exact_match_p_to_p_to_p(self):
         """P → P → P with 'intro h1 h2, apply h1' is now proved."""

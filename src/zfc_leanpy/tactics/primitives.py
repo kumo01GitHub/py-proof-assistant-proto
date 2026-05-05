@@ -114,21 +114,17 @@ def do_intro(state: ProofState, name: Optional[str]) -> ProofState:
 def do_apply(state: ProofState, arg: str) -> ProofState:
     term_type_str = state.hypotheses.get(arg)
     if term_type_str is None:
-        return trusted_close(
-            state,
-            f"apply {arg}",
-            f"hypothesis '{arg}' not found in proof context; "
-            "introduce it via 'have' or 'intro' before applying",
+        raise TacticError(
+            f"apply: hypothesis '{arg}' not found in proof context; "
+            "introduce it via 'have' or 'intro' before applying"
         )
 
     term_type = fparse(term_type_str)
     goal = fparse(state.current_goal() or "")
     if term_type is None or goal is None:
-        return trusted_close(
-            state,
-            f"apply {arg}",
-            f"cannot parse type of '{arg}' ('{term_type_str}') or current goal — "
-            "type tracking is incomplete for this expression",
+        raise TacticError(
+            f"apply: cannot parse type of '{arg}' ('{term_type_str}') or current goal — "
+            "type tracking is incomplete for this expression"
         )
 
     # Exact match: hypothesis type equals the goal — kernel-close immediately
@@ -150,12 +146,10 @@ def do_apply(state: ProofState, arg: str) -> ProofState:
         state.replace_goal(fstr(term_type.x))
         return state
 
-    return trusted_close(
-        state,
-        f"apply {arg}",
-        f"'{arg}' has type '{term_type_str}' whose conclusion does not match goal "
+    raise TacticError(
+        f"apply: '{arg}' has type '{term_type_str}' whose conclusion does not match goal "
         f"'{state.current_goal()}'; "
-        "ensure the hypothesis type ends with the current goal",
+        "ensure the hypothesis type ends with the current goal"
     )
 
 
@@ -169,33 +163,25 @@ def do_cases(state: ProofState, arg: str) -> ProofState:
     the left branch (``h_left : A``) and one for the right branch
     (``h_right : B``) — mirroring Lean's ``cases h`` on ``∨``.
 
-    Falls back to a trusted step with an explanatory reason when the hypothesis
-    type cannot be parsed or is not a conjunction/disjunction.
+    Raises :class:`~zfc_leanpy.kernel.TacticError` when the hypothesis type
+    cannot be parsed or is not a conjunction/disjunction.
     """
     hyp_name = arg.split()[0].strip() if arg.strip() else ""
     if not hyp_name:
-        return trusted_close(
-            state,
-            "cases",
-            "no hypothesis name provided; usage: 'cases <hyp>'",
-        )
+        raise TacticError("cases: no hypothesis name provided; usage: 'cases <hyp>'")
 
     hyp_type_str = state.hypotheses.get(hyp_name)
     if hyp_type_str is None:
-        return trusted_close(
-            state,
-            f"cases {hyp_name}",
-            f"hypothesis '{hyp_name}' not found in proof context; "
-            "ensure it is introduced before calling cases",
+        raise TacticError(
+            f"cases: hypothesis '{hyp_name}' not found in proof context; "
+            "ensure it is introduced before calling cases"
         )
 
     hyp_type = fparse(hyp_type_str)
     if hyp_type is None:
-        return trusted_close(
-            state,
-            f"cases {hyp_name}",
-            f"cannot parse type of '{hyp_name}': '{hyp_type_str}' — "
-            "structural case analysis requires a parseable proposition",
+        raise TacticError(
+            f"cases: cannot parse type of '{hyp_name}': '{hyp_type_str}' — "
+            "structural case analysis requires a parseable proposition"
         )
 
     if isinstance(hyp_type, FAnd):
@@ -212,10 +198,8 @@ def do_cases(state: ProofState, arg: str) -> ProofState:
         # h : A ∨ B  →  two goals: [A-branch], [B-branch]
         current_goal = state.current_goal()
         if current_goal is None:
-            return trusted_close(
-                state,
-                f"cases {hyp_name}",
-                "no current goal to perform case split on",
+            raise TacticError(
+                f"cases: no current goal to perform case split on"
             )
         h_left = f"{hyp_name}_left"
         h_right = f"{hyp_name}_right"
@@ -234,11 +218,9 @@ def do_cases(state: ProofState, arg: str) -> ProofState:
         state._hyp_stack.insert(1, right_hyps)
         return state
 
-    return trusted_close(
-        state,
-        f"cases {hyp_name}",
-        f"'{hyp_name}' has type '{hyp_type_str}' — structural cases requires ∧ or ∨; "
-        "for implications use 'intro', for existentials use 'rcases'",
+    raise TacticError(
+        f"cases: '{hyp_name}' has type '{hyp_type_str}' — structural cases requires ∧ or ∨; "
+        "for implications use 'intro', for existentials use 'rcases'"
     )
 
 
@@ -250,20 +232,18 @@ def do_rw(state: ProofState, rules_text: str) -> ProofState:
     ``b`` in the current goal (using ``fsubst``).  Prefix the rule with ``←``
     to rewrite in the reverse direction (``b → a``).
 
-    Falls back to a trusted step with an explanatory reason when a rule cannot
+    Raises :class:`~zfc_leanpy.kernel.TacticError` when a rule cannot
     be applied structurally.
     """
     m = re.search(r"\[([^\]]*)\]", rules_text)
     if not m:
-        return trusted_close(
-            state,
-            "rw",
-            "cannot parse rewrite rule list — expected syntax: rw [h] or rw [h1, h2]",
+        raise TacticError(
+            "rw: cannot parse rewrite rule list — expected syntax: rw [h] or rw [h1, h2]"
         )
 
     rules = [r.strip() for r in m.group(1).split(",") if r.strip()]
     if not rules:
-        return trusted_close(state, "rw", "empty rewrite rule list")
+        raise TacticError("rw: empty rewrite rule list")
 
     goal_str = state.current_goal() or ""
 
@@ -273,19 +253,15 @@ def do_rw(state: ProofState, rules_text: str) -> ProofState:
 
         hyp_type_str = state.hypotheses.get(rule_name)
         if hyp_type_str is None:
-            return trusted_close(
-                state,
-                "rw",
-                f"rewrite rule '{rule_name}' not found in proof context; "
-                "introduce the equality via 'have' or 'intro' first",
+            raise TacticError(
+                f"rw: rewrite rule '{rule_name}' not found in proof context; "
+                "introduce the equality via 'have' or 'intro' first"
             )
 
         hyp_type = fparse(hyp_type_str)
         if not isinstance(hyp_type, FEq):
-            return trusted_close(
-                state,
-                "rw",
-                f"'{rule_name}' has type '{hyp_type_str}' — rw requires an equality (a = b)",
+            raise TacticError(
+                f"rw: '{rule_name}' has type '{hyp_type_str}' — rw requires an equality (a = b)"
             )
 
         lhs, rhs = hyp_type.l, hyp_type.r
@@ -294,10 +270,8 @@ def do_rw(state: ProofState, rules_text: str) -> ProofState:
 
         goal_f = fparse(goal_str)
         if goal_f is None:
-            return trusted_close(
-                state,
-                "rw",
-                f"cannot parse current goal '{goal_str}' for rewriting",
+            raise TacticError(
+                f"rw: cannot parse current goal '{goal_str}' for rewriting"
             )
 
         new_goal_f = fsubst(goal_f, lhs, rhs)

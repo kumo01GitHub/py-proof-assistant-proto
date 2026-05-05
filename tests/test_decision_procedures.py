@@ -251,13 +251,15 @@ class TestIntegrationProved:
 
         assert get_status("one_gt_zero") == "proved"
 
-    def test_trusted_fallback_not_proved(self):
-        """omega が解けないゴールは trusted にフォールバックする。"""
+    def test_unprovable_goal_fails_with_incomplete_status(self):
+        """omega が解けないゴールは TacticError で停止し、証明は incomplete になる。"""
         from zfc_leanpy.dsl import get_status
 
         @theorem(name="n_gt_zero", statement="n > 0", tactics=["omega"])
         def n_gt_zero():
             pass
 
-        # 変数のみのゴールは証明不可 → trusted にフォールバック
-        assert get_status("n_gt_zero") in ("trusted", "proved")
+        # 変数のみのゴールは証明不可 → TacticError で停止し incomplete になる
+        status = get_status("n_gt_zero")
+        assert status is not None
+        assert "incomplete" in status

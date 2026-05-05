@@ -89,7 +89,8 @@ Lean 4 の構文・タクティク体系を参考にしつつ、Python ユーザ
 信頼境界のコントラクト:
   close_with(term) は必ず type_check(ctx, term) を呼ぶ。
   type_check が ProofTypeError を投げれば close_with は TacticError を再送出して失敗する。
-  trusted_close() は type_check を通さずゴールを閉じる（trusted マーク付き）。
+  trusted_close() は後方互換のため残るが、タクティク実装では原則使用しない。
+  暗黙の trusted fallback は廃止: 検証不能なケースは TacticError で停止する。
 ```
 
 ---
@@ -298,22 +299,22 @@ Fourier-Motzkin 消去法で線形算術の命題（整数・自然数の不等�
 |---|---|---|
 | `"admit"` / `"sorry"` | `state.admitted = True` | sorry |
 | `"intro ..."` / `"intros ..."` | `do_intro()` | sound |
-| `"exact ..."` | `parse_proof_term()` → `close_with()` | sound（or trusted fallback） |
+| `"exact ..."` | `parse_proof_term()` → `close_with()` | sound（失敗時は TacticError） |
 | `"assumption"` | 仮説スキャン → `close_with(PVar)` | sound |
 | `"rfl"` | `FEq` 確認 → `close_with(PRefl)` | sound |
 | `"trivial"` | `FTrue` / `FEq` / 仮説照合 → `close_with` | sound |
 | `"constructor"` / `"split"` | `FAnd` / `FIff` のゴール分割 | sound |
 | `"left"` / `"right"` | `FOr` のゴール選択 | sound |
 | `"use ..."` | `FEx` のゴール具体化 | sound |
-| `"apply ..."` | `do_apply()` | sound / trusted |
-| `"have ..."` | サブゴール生成 or 即時導入 | sound / trusted |
-| `"contradiction"` | `try_kernel_close_simple()` → trusted fallback | sound / trusted |
-| `"ring"` | `PRing` → `close_with` → trusted fallback | sound / trusted |
-| `"norm_num"` | `PNormNum` → `close_with` → trusted fallback | sound / trusted |
-| `"omega"` | `POmega` → `close_with` → trusted fallback | sound / trusted |
-| `"simp ..."` | `PSimp` → `close_with` → trusted fallback | sound / trusted |
-| `"rw ..."` | `do_rw()` | sound / trusted |
-| `"cases ..."` / `"rcases ..."` | `do_cases()` | sound / trusted |
+| `"apply ..."` | `do_apply()` | sound（失敗時は TacticError） |
+| `"have ..."` | サブゴール生成 or 即時導入 | sound / trusted（`have h := expr` のみ明示的 trusted） |
+| `"contradiction"` | `try_kernel_close_simple()` → TacticError | sound（失敗時は TacticError） |
+| `"ring"` | `PRing` → `close_with` → TacticError | sound（失敗時は TacticError） |
+| `"norm_num"` | `PNormNum` → `close_with` → TacticError | sound（失敗時は TacticError） |
+| `"omega"` | `POmega` → `close_with` → TacticError | sound（失敗時は TacticError） |
+| `"simp ..."` | `PSimp` → `close_with` → TacticError | sound（失敗時は TacticError） |
+| `"rw ..."` | `do_rw()` | sound（失敗時は TacticError） |
+| `"cases ..."` / `"rcases ..."` | `do_cases()` | sound（失敗時は TacticError） |
 | その他 | `TacticError("unknown tactic")` | — |
 
 エントリポイントで `require_proof_state` / `require_tactic_string` を呼ぶ（ガード）。
@@ -332,19 +333,19 @@ goal が FNot(P)    → hypotheses[name] = P, replace_goal("False")
 
 **`do_apply(state, arg)`**:
 ```
-arg が仮説にない       → trusted_close（not in context）
+arg が仮説にない       → TacticError（not in context）
 仮説型 = FImpl(A, B):
   feq(term_type, goal) → close_with(PVar(arg))  ← sound
   feq(B, goal)         → replace_goal(A)         ← sound（後退適用）
   FNot(P) and False   → replace_goal(P)          ← sound（否定除去）
-  それ以外            → trusted_close
+  それ以外            → TacticError（結論がゴールに合わない）
 ```
 
 **`do_cases(state, arg)`**:
 ```
 hyp が FAnd(A, B) → h1:A, h2:B を仮説に追加（∧除去、sound）
 hyp が FOr(A, B)  → 2サブゴール生成（left/right 仮説、sound）
-それ以外          → trusted_close
+それ以外          → TacticError（∧/∨ 以外は対応不可）
 ```
 
 **`do_rw(state, rules_text)`**:
@@ -352,13 +353,15 @@ hyp が FOr(A, B)  → 2サブゴール生成（left/right 仮説、sound）
 "[h1, h2, ...]" を解析
 各ルール h:
   hypotheses[h] が FEq(a, b) → fsubst でゴール中の a を b に置換（sound）
-  そうでない                 → trusted_close
+  そうでない                 → TacticError（等式仮説でない）
 置換後、try_kernel_close_simple() で自動閉鎖を試みる
 ```
 
 **`trusted_close(state, tag, reason)`**:
 カーネル検証なしにゴールを閉じる。`trusted_steps` / `trusted_reasons` に記録。
 `pop_goal()` を直接呼ぶため `type_check()` は経由しない（非 sound）。
+**注意**: タクティク実装での暗黙的呼び出しは廃止。現在は `have h := expr` が
+内部で同様の操作を行う唯一の明示的 trusted ステップ。
 
 **`try_kernel_close_simple(state)`**:
 ```
@@ -688,7 +691,7 @@ _TheoremMeta.__new__()
        register_entry("AndComm", {status: "proved", certificate: {...}, ...})
 ```
 
-### 4.2 trusted fallback フロー
+### 4.2 tactic 失敗フロー（旧 trusted fallback フロー）
 
 ```
 apply_tactic(state, "apply h")
@@ -696,16 +699,20 @@ apply_tactic(state, "apply h")
         ▼
 do_apply(state, "h")
         │
-        ├─ h in hypotheses? No → trusted_close(state, "apply h", "not in context")
-        │                               ├─ trusted_steps.append("apply h")
-        │                               ├─ trusted_reasons.append("...")
-        │                               └─ pop_goal()  ← type_check なし
+        ├─ h in hypotheses? No → TacticError("apply: hypothesis 'h' not found …")
+        │                               ↳ run_tactics がキャッチしてログ出力・ループ中断
         │
         └─ h in hypotheses? Yes, type = "A → B"
                   ├─ feq(type, goal)? Yes → close_with(PVar(h))  ← sound
                   ├─ isinstance(FImpl) and feq(B, goal)? → replace_goal(A)  ← sound
-                  └─ それ以外 → trusted_close(...)  ← trusted
+                  └─ それ以外 → TacticError("apply: '…' conclusion does not match goal …")
+                                  ↳ proof は incomplete で停止
 ```
+
+**設計方針**: タクティクが検証不能なケースを検出した場合、暗黙に `trusted_close`
+で前進することを廃止した。代わりに `TacticError` を投げ、`run_tactics` が
+ログに記録してループを中断する。結果として証明は **incomplete** 状態になり、
+ユーザーは明示的に修正するか `sorry` を使う必要がある。
 
 ---
 
@@ -716,20 +723,27 @@ do_apply(state, "h")
                  │  登録直後    │
                  └──────┬───────┘
                         │ run_tactics 実行後
-          ┌─────────────┼─────────────┐
-          ▼             ▼             ▼
-       sorry          trusted       proved
-     (admitted)  (trusted_steps>0  (closed &
-                   or not replay)  replay_ok &
-                                 trusted==0)
+          ┌─────────────┼──────────────────┐
+          ▼             ▼                  ▼
+       sorry          trusted          incomplete
+     (admitted)  (have h := expr など  (TacticError で
+                  明示的 trusted ステップ)  途中停止)
           │             │
           └──────┬───────┘
                  │ revalidate_proof(name, new_tactics)
-                 ▼
-             proved（昇格成功時）or 変化なし
+                 ▼                    ▼
+             proved（昇格成功時）  incomplete（失敗時）
 
   axiom / defined: 遷移なし（証明が不要）
+  proved: run_tactics が全ゴールを TacticError なしで閉鎖し replay_ok=True
 ```
+
+**trusted ステータスになる条件（明示的操作のみ）**:
+- `have h : T := expr` — 証明項を検証しない即時仮説導入
+- `sorry` / `admit` — → sorry ステータス（admitted=True）
+
+**暗黙的 trusted fallback は廃止**: タクティクが検証不能なケースは
+`TacticError` を投げ、証明は **incomplete** 状態で停止する。
 
 ---
 
@@ -737,17 +751,17 @@ do_apply(state, "h")
 
 ### 6.1 健全性の根拠
 
-1. **唯一の閉鎖経路**: `ProofState.close_with(term)` のみが `pop_goal()` を呼べる公式経路（`trusted_close` を除く）
+1. **唯一の閉鎖経路**: `ProofState.close_with(term)` のみが `pop_goal()` を呼べる公式経路
 2. **型検査必須**: `close_with` は `type_check(ctx, term)` を必ず呼ぶ
 3. **型検査の完全性**: `type_check` は `formula/typecheck.py` に集中しており、決定手続き証明項も内部でアルゴリズムを実行して検証する
 4. **replay 検証**: `replay_proof` で全タクティクを再実行し、trusted_steps なしで閉じられることを確認してから `proved` にする
+5. **暗黙的 trusted fallback の廃止**: 検証不能なケースは `TacticError` で停止し、暗黙に証明が前進しない
 
 ### 6.2 非健全箇所（known limitations）
 
 | 箇所 | 理由 | 影響 |
 |---|---|---|
-| `trusted_close()` | カーネルを通さずゴールを閉じる | `trusted` ステータス（証明書なし） |
-| `have h := expr` | 証明項を検証しない即時仮説導入 | `trusted` ステータス |
+| `have h := expr` | 証明項を検証しない即時仮説導入（明示的 trusted） | `trusted` ステータス（証明書なし） |
 | `fparse` の曖昧性 | 優先度解析が完全でない場合がある | 解析失敗時は `None` を返す |
 | `FEq` の項文字列 | 項を AST 化していないため項の等値性は文字列比較 | `ring` / `omega` に依存 |
 | `simp` の指数爆発 | 2^n 真理値表 | 変数が多い命題は遅い |
